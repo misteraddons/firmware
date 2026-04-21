@@ -1,0 +1,30 @@
+# Firmware Mirror
+
+Latest firmware files for MiSTer Addons projects I use. Last checked: 2026-04-21.
+
+## Current Files
+
+| Project | Local file | Source |
+| --- | --- | --- |
+| Reflex Prism | `reflex-prism/v1.10.1/prism_dac.uf2` | [`misteraddons/Reflex-Prism` v1.10.1](https://github.com/misteraddons/Reflex-Prism/releases/tag/v1.10.1) |
+| Reflex Adapt | `reflex-adapt/v2.01/reflex_updater.sh` | [`misteraddons/Reflex-Adapt` v2.01](https://github.com/misteraddons/Reflex-Adapt/releases/tag/v2.01) |
+| Reflex Adapt | `reflex-adapt/v2.01/reflex-v2.01.zip` | [`misteraddons/Reflex-Adapt` v2.01](https://github.com/misteraddons/Reflex-Adapt/releases/tag/v2.01) |
+| Reflex Adapt | `reflex-adapt/v2.01/reflex-v2.01.tar.gz` | [`misteraddons/Reflex-Adapt` v2.01](https://github.com/misteraddons/Reflex-Adapt/releases/tag/v2.01) |
+| MiSTercade V1 | `mistercade-v1/main-2025/_MiSTercade_V1-2025.zip` | [`misteraddons/MiSTercadeV1`](https://github.com/misteraddons/MiSTercadeV1/commit/6b9ab2dd289305a56be9a2f173248b50224aae19), commit `6b9ab2d` |
+| MiSTercade V2 | `mistercade-v2/main/Scripts/_MiSTercade_V2_/` | [`misteraddons/MiSTercadeV2`](https://github.com/misteraddons/MiSTercadeV2/commit/0f0f1d67660a182854cd08b4336bfc963d46312d), commit `0f0f1d` |
+
+## Install Notes
+
+Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. The upstream v1.10.1 release is a firmware hotfix for dashboard settings and custom EDID persistence.
+
+Reflex Adapt: copy `reflex_updater.sh` to the `Scripts` folder on the MiSTer SD card, or use `reflex-v2.01.zip` for the desktop updater package.
+
+MiSTercade V1: extract `_MiSTercade_V1-2025.zip` to the `Scripts` folder on the MiSTer SD card and run the included updater script.
+
+MiSTercade V2: copy the `_MiSTercade_V2_` folder into the MiSTer SD card `Scripts` folder. Hold `JOY1 PROG`, `JOY2 PROG`, or both while powering on, then run `MiSTercade_V2_Program`.
+
+## Verification
+
+Checksums are in [`checksums.sha256`](checksums.sha256).
+
+These files are mirrors of upstream firmware artifacts. Use upstream docs and release notes as the source of truth when flashing hardware.
