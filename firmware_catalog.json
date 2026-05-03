@@ -1,0 +1,184 @@
+{
+  "cache_dir": "firmware-cache",
+  "items": [
+    {
+      "id": "mistercade-v2",
+      "label": "MiSTercade V2",
+      "install_method": "rp2040",
+      "file_type": "uf2",
+      "controller_check": true,
+      "local_paths": [
+        "mistercade-v2/main/Scripts/_MiSTercade_V2_/GP2040-CE_latest_MiSTercadeV2.uf2"
+      ],
+      "sources": [
+        {
+          "type": "github_release_asset",
+          "repo": "OpenStickCommunity/GP2040-CE",
+          "release": "latest",
+          "asset_regex": "^GP2040-CE_.*_MiSTercadeV2\\.uf2$"
+        },
+        {
+          "type": "github_repo_file",
+          "repo": "misteraddons/MiSTercade",
+          "ref": "main",
+          "path": "mistercade_v2/firmware/GP2040-CE_0.7.12_MiSTercadeV2.uf2"
+        }
+      ]
+    },
+    {
+      "id": "mistercade-v1-2025",
+      "label": "MiSTercade V1 2025 (32u4 package)",
+      "install_method": "cache_only",
+      "file_type": "package",
+      "controller_check": false,
+      "local_paths": [
+        "mistercade-v1/main-2025/_MiSTercade_V1-2025.zip"
+      ],
+      "notes": "32u4 firmware package; cache/download only in this RP2040 installer.",
+      "sources": [
+        {
+          "type": "github_repo_file",
+          "repo": "misteraddons/MiSTercade",
+          "ref": "main",
+          "path": "mistercade_v1_2025/firmware/_MiSTercade_V1-2025.zip"
+        }
+      ]
+    },
+    {
+      "id": "adapt-v1",
+      "label": "Reflex Adapt V1.x (32u4 package)",
+      "install_method": "cache_only",
+      "file_type": "package",
+      "controller_check": false,
+      "local_paths": [
+        "reflex-adapt/v2.01/reflex-v2.01.zip"
+      ],
+      "notes": "32u4 firmware package; cache/download only in this RP2040 installer.",
+      "sources": [
+        {
+          "type": "github_release_asset",
+          "repo": "misteraddons/Reflex-Adapt",
+          "release": "latest",
+          "asset_regex": "^reflex-v.*\\.zip$"
+        }
+      ]
+    },
+    {
+      "id": "adapt-v2",
+      "label": "Reflex Adapt V2 (coming soon)",
+      "install_method": "coming_soon",
+      "file_type": "uf2",
+      "controller_check": true,
+      "notes": "Placeholder for the upcoming Adapt V2 firmware."
+    },
+    {
+      "id": "reflex-encode-v2",
+      "label": "Reflex Encode V2.0",
+      "install_method": "rp2040",
+      "file_type": "uf2",
+      "controller_check": true,
+      "sources": [
+        {
+          "type": "github_release_asset",
+          "repo": "OpenStickCommunity/GP2040-CE",
+          "release": "latest",
+          "asset_regex": "^GP2040-CE_.*_ReflexEncodeV2\\.0\\.uf2$"
+        }
+      ]
+    },
+    {
+      "id": "reflex-ctrl-genesis6",
+      "label": "Reflex CTRL Genesis 6",
+      "install_method": "rp2040",
+      "file_type": "uf2",
+      "controller_check": true,
+      "sources": [
+        {
+          "type": "github_release_asset",
+          "repo": "OpenStickCommunity/GP2040-CE",
+          "release": "latest",
+          "asset_regex": "^GP2040-CE_.*_ReflexCtrlGenesis6\\.uf2$"
+        }
+      ]
+    },
+    {
+      "id": "reflex-ctrl-nes",
+      "label": "Reflex CTRL NES",
+      "install_method": "rp2040",
+      "file_type": "uf2",
+      "controller_check": true,
+      "sources": [
+        {
+          "type": "github_release_asset",
+          "repo": "OpenStickCommunity/GP2040-CE",
+          "release": "latest",
+          "asset_regex": "^GP2040-CE_.*_ReflexCtrlNES\\.uf2$"
+        }
+      ]
+    },
+    {
+      "id": "reflex-ctrl-snes",
+      "label": "Reflex CTRL SNES",
+      "install_method": "rp2040",
+      "file_type": "uf2",
+      "controller_check": true,
+      "sources": [
+        {
+          "type": "github_release_asset",
+          "repo": "OpenStickCommunity/GP2040-CE",
+          "release": "latest",
+          "asset_regex": "^GP2040-CE_.*_ReflexCtrlSNES\\.uf2$"
+        }
+      ]
+    },
+    {
+      "id": "reflex-ctrl-saturn",
+      "label": "Reflex CTRL Saturn",
+      "install_method": "rp2040",
+      "file_type": "uf2",
+      "controller_check": true,
+      "sources": [
+        {
+          "type": "github_release_asset",
+          "repo": "OpenStickCommunity/GP2040-CE",
+          "release": "latest",
+          "asset_regex": "^GP2040-CE_.*_ReflexCtrlSaturn\\.uf2$"
+        }
+      ]
+    },
+    {
+      "id": "reflex-ctrl-vb",
+      "label": "Reflex CTRL Virtual Boy",
+      "install_method": "rp2040",
+      "file_type": "uf2",
+      "controller_check": true,
+      "sources": [
+        {
+          "type": "github_release_asset",
+          "repo": "OpenStickCommunity/GP2040-CE",
+          "release": "latest",
+          "asset_regex": "^GP2040-CE_.*_ReflexCtrlVB\\.uf2$"
+        }
+      ]
+    },
+    {
+      "id": "reflex-prism",
+      "label": "Reflex Prism",
+      "install_method": "rp2040",
+      "file_type": "uf2",
+      "controller_check": false,
+      "local_paths": [
+        "reflex-prism/v1.10.1/prism_dac.uf2"
+      ],
+      "sources": [
+        {
+          "type": "github_repo_latest_semver_file",
+          "repo": "misteraddons/firmware",
+          "ref": "main",
+          "directory": "reflex-prism",
+          "file_name": "prism_dac.uf2"
+        }
+      ]
+    }
+  ]
+}
