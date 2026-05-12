@@ -168,7 +168,7 @@
       "file_type": "uf2",
       "controller_check": false,
       "local_paths": [
-        "reflex-prism/v1.10.1/prism_dac.uf2"
+        "reflex-prism/v1.10.3/prism_dac.uf2"
       ],
       "sources": [
         {
