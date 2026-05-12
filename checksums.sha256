@@ -6,5 +6,12 @@ ef1b43babc9ecc98522aa06ccc4ab6332e9e5d09a3a9efc7d785085ac98ebee4  mistercade-v2/
 5f3cd33cbaae77e5b3aa7c858cd07f2455fb8669255aace33050685c5fc341bf  reflex-adapt/v2.01/reflex_updater.sh
 584386414aa1be1674cee316f6b676895f4dab1ef8e6ebad89c494b13164d876  reflex-adapt/v2.01/reflex-v2.01.tar.gz
 c9d3e07325c4292fcd4505a1d0c2b09ebb971156fed2a084200ef2a6cd5dc487  reflex-adapt/v2.01/reflex-v2.01.zip
+9a87597e71d5327bfac403adc7c47a42302e383559ac87572136006f85adfbf6  reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlGenesis6.uf2
+f324b11fb3e94c8ef460c3c296e1a5b371e29ba41852a5c7ddb07efc41267441  reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlNES.uf2
+d1cfb6784992af1f282f90c446fe8d5b20c031d47aa94bc04d14290050fe969d  reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlSaturn.uf2
+14af7681f971aeff1ddb573ad8c1aaf455ec0b5aeecd92a15c858034cdf1abcb  reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlSNES.uf2
+a511a5eafa3f2c769803885e31700c78eec0257c39000f4f0f24fed8fd2f380e  reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlVB.uf2
+cc2a0611754e67088a84997919357fade2b792edafe80807ea3fd2075353f01b  reflex-encode/v0.7.12/GP2040-CE_0.7.12_ReflexEncodeV1.2.uf2
+e738d9edb49352be854fb908fad637992b9f6f3a0fd9c9036dca7e0a51f67052  reflex-encode/v0.7.12/GP2040-CE_0.7.12_ReflexEncodeV2.0.uf2
 e4cb7caf2f3146e4a36de168dcca500b534980f4f816c1fd853f2a6077a0ceec  reflex-prism/v1.10.1/prism_dac.uf2
 6e06c8dc93e713af8900c0f1f526335b93baab72a9d4ac156ca7e2340e48095e  reflex-prism/v1.10.3/prism_dac.uf2

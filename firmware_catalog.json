@@ -72,11 +72,32 @@
       "notes": "Placeholder for the upcoming Adapt V2 firmware."
     },
     {
+      "id": "reflex-encode-v1",
+      "label": "Reflex Encode V1.2",
+      "install_method": "rp2040",
+      "file_type": "uf2",
+      "controller_check": true,
+      "local_paths": [
+        "reflex-encode/v0.7.12/GP2040-CE_0.7.12_ReflexEncodeV1.2.uf2"
+      ],
+      "sources": [
+        {
+          "type": "github_release_asset",
+          "repo": "OpenStickCommunity/GP2040-CE",
+          "release": "latest",
+          "asset_regex": "^GP2040-CE_.*_ReflexEncodeV1\\.2\\.uf2$"
+        }
+      ]
+    },
+    {
       "id": "reflex-encode-v2",
       "label": "Reflex Encode V2.0",
       "install_method": "rp2040",
       "file_type": "uf2",
       "controller_check": true,
+      "local_paths": [
+        "reflex-encode/v0.7.12/GP2040-CE_0.7.12_ReflexEncodeV2.0.uf2"
+      ],
       "sources": [
         {
           "type": "github_release_asset",
@@ -92,6 +113,9 @@
       "install_method": "rp2040",
       "file_type": "uf2",
       "controller_check": true,
+      "local_paths": [
+        "reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlGenesis6.uf2"
+      ],
       "sources": [
         {
           "type": "github_release_asset",
@@ -107,6 +131,9 @@
       "install_method": "rp2040",
       "file_type": "uf2",
       "controller_check": true,
+      "local_paths": [
+        "reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlNES.uf2"
+      ],
       "sources": [
         {
           "type": "github_release_asset",
@@ -122,6 +149,9 @@
       "install_method": "rp2040",
       "file_type": "uf2",
       "controller_check": true,
+      "local_paths": [
+        "reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlSNES.uf2"
+      ],
       "sources": [
         {
           "type": "github_release_asset",
@@ -137,6 +167,9 @@
       "install_method": "rp2040",
       "file_type": "uf2",
       "controller_check": true,
+      "local_paths": [
+        "reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlSaturn.uf2"
+      ],
       "sources": [
         {
           "type": "github_release_asset",
@@ -152,6 +185,9 @@
       "install_method": "rp2040",
       "file_type": "uf2",
       "controller_check": true,
+      "local_paths": [
+        "reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlVB.uf2"
+      ],
       "sources": [
         {
           "type": "github_release_asset",
