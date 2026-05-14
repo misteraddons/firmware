@@ -6,7 +6,7 @@ Firmware files and a small cross-platform installer/cache for MiSTer Addons prod
 
 | Project | Local file | Source |
 | --- | --- | --- |
-| Reflex Prism | `reflex-prism/v1.10.3/prism_dac.uf2` | [`misteraddons/Reflex-Prism` v1.10.3](https://github.com/misteraddons/Reflex-Prism/releases/tag/v1.10.3) |
+| Reflex Prism | `reflex-prism/v1.10.4/prism_dac.uf2` | [`misteraddons/Reflex-Prism` v1.10.4](https://github.com/misteraddons/Reflex-Prism/releases/tag/v1.10.4) |
 | Reflex Adapt | `reflex-adapt/v2.01/reflex_updater.sh` | [`misteraddons/Reflex-Adapt` v2.01](https://github.com/misteraddons/Reflex-Adapt/releases/tag/v2.01) |
 | Reflex Adapt | `reflex-adapt/v2.01/reflex-v2.01.zip` | [`misteraddons/Reflex-Adapt` v2.01](https://github.com/misteraddons/Reflex-Adapt/releases/tag/v2.01) |
 | Reflex Adapt | `reflex-adapt/v2.01/reflex-v2.01.tar.gz` | [`misteraddons/Reflex-Adapt` v2.01](https://github.com/misteraddons/Reflex-Adapt/releases/tag/v2.01) |
@@ -37,7 +37,7 @@ python firmware_installer.py --product reflex-ctrl-nes --download
 python firmware_installer.py --product reflex-ctrl-nes --once
 ```
 
-Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. The upstream v1.10.3 release updates the Prism USB VID/PID and built-in 4:3 EDID modes.
+Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. The upstream v1.10.4 release adds stable Auto sync behavior, keeps VGA routes in Pass Sync, and includes the pre-release sync shakedown matrix.
 
 Reflex Adapt: copy `reflex_updater.sh` to the `Scripts` folder on the MiSTer SD card, or use `reflex-v2.01.zip` for the desktop updater package.
 
