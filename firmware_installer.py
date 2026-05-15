@@ -36,6 +36,12 @@ RPI_RP2_LABEL = "RPI-RP2"
 COPY_BUFFER_SIZE = 1024 * 1024
 CHECK_MARK = "[OK]"
 UF2_TARGET_NAME = "firmware.uf2"
+UF2_BLOCK_SIZE = 512
+UF2_MAGIC_START0 = 0x0A324655
+UF2_MAGIC_START1 = 0x9E5D5157
+UF2_MAGIC_END = 0x0AB16F30
+UF2_FLAG_FAMILY_ID_PRESENT = 0x00002000
+RP2040_UF2_FAMILY_ID = 0xE48BFF56
 
 DRIVE_UNKNOWN = 0
 DRIVE_NO_ROOT_DIR = 1
@@ -138,6 +144,7 @@ class CatalogItem:
     sources: Sequence[dict]
     local_paths: Sequence[str]
     notes: str = ""
+    expected_uf2_family: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -179,7 +186,9 @@ def resolve_firmware(path: Path, zip_member: Optional[str] = None) -> FirmwareSo
     if suffix == ".uf2":
         if zip_member:
             raise FirmwareError("--zip-member is only valid for .zip firmware packages.")
-        return FirmwareSource(path)
+        source = FirmwareSource(path)
+        validate_firmware_source(source)
+        return source
 
     if suffix == ".zip":
         entries = list_uf2_entries(path)
@@ -191,7 +200,9 @@ def resolve_firmware(path: Path, zip_member: Optional[str] = None) -> FirmwareSo
             raise FirmwareError("No UF2 files found in this archive.")
         if len(entries) > 1:
             raise MultipleFirmwareFound(entries)
-        return FirmwareSource(path, entries[0])
+        source = FirmwareSource(path, entries[0])
+        validate_firmware_source(source)
+        return source
 
     raise FirmwareError("Select a .uf2 file or a .zip file containing a .uf2 file.")
 
@@ -208,6 +219,8 @@ GITHUB_API = "https://api.github.com/repos"
 
 
 def default_firmware_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent)).resolve()
     return Path(__file__).resolve().parent
 
 
@@ -269,6 +282,7 @@ def load_catalog(root: Optional[Path] = None) -> List[CatalogItem]:
                 sources=tuple(raw.get("sources", [])),
                 local_paths=tuple(raw.get("local_paths", [])),
                 notes=raw.get("notes", ""),
+                expected_uf2_family=parse_optional_int(raw.get("expected_uf2_family")),
             )
         )
     return items
@@ -363,6 +377,7 @@ def ensure_catalog_firmware(
     if not force_download:
         existing, _status = find_catalog_source(item, root)
         if existing:
+            validate_catalog_firmware(item, existing)
             return existing
 
     if not item.sources:
@@ -378,7 +393,9 @@ def ensure_catalog_firmware(
                 if log:
                     log(f"Downloading {item.label} from {plan.source_label}: {plan.file_name}")
                 download_file(plan.url, target)
-            return FirmwareSource(target)
+            source = FirmwareSource(target)
+            validate_catalog_firmware(item, source)
+            return source
         except Exception as error:
             last_error = error
             if log:
@@ -386,6 +403,7 @@ def ensure_catalog_firmware(
 
     local, status = find_catalog_source(item, root)
     if local:
+        validate_catalog_firmware(item, local)
         if log:
             log(f"Using {status} firmware because download failed.")
         return local
@@ -407,6 +425,11 @@ def resolve_download_plan(source: dict) -> DownloadPlan:
         url = source["url"]
         return DownloadPlan(url=url, file_name=source.get("file_name") or Path(url).name, source_label=url)
     raise FirmwareError(f"Unsupported source type: {source_type}")
+
+
+def validate_catalog_firmware(item: CatalogItem, source: FirmwareSource) -> None:
+    if item.file_type == "uf2":
+        validate_firmware_source(source, item.expected_uf2_family)
 
 
 def resolve_github_release_asset(source: dict) -> DownloadPlan:
@@ -511,6 +534,76 @@ def semver_key(value: str) -> Tuple[int, ...]:
 def safe_file_name(value: str) -> str:
     name = Path(value).name
     return re.sub(r"[^A-Za-z0-9._+ -]", "_", name)
+
+
+def parse_optional_int(value: object) -> Optional[int]:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return int(value, 0)
+    raise FirmwareError(f"Invalid integer value in catalog: {value!r}")
+
+
+def validate_firmware_source(source: FirmwareSource, expected_family: Optional[int] = None) -> None:
+    if source.copy_name.lower().endswith(".uf2"):
+        with source.open_binary() as stream:
+            validate_uf2_stream(stream, source.display_name, expected_family)
+
+
+def validate_uf2_stream(stream: BinaryIO, label: str, expected_family: Optional[int] = None) -> None:
+    expected_blocks: Optional[int] = None
+    seen_blocks: Set[int] = set()
+    family_ids: Set[int] = set()
+    block_count = 0
+
+    while True:
+        block = stream.read(UF2_BLOCK_SIZE)
+        if not block:
+            break
+        block_count += 1
+        if len(block) != UF2_BLOCK_SIZE:
+            raise FirmwareError(f"{label} is not a valid UF2: partial block at #{block_count}.")
+
+        start0 = int.from_bytes(block[0:4], "little")
+        start1 = int.from_bytes(block[4:8], "little")
+        flags = int.from_bytes(block[8:12], "little")
+        payload_size = int.from_bytes(block[16:20], "little")
+        block_no = int.from_bytes(block[20:24], "little")
+        num_blocks = int.from_bytes(block[24:28], "little")
+        family_or_size = int.from_bytes(block[28:32], "little")
+        end_magic = int.from_bytes(block[508:512], "little")
+
+        if start0 != UF2_MAGIC_START0 or start1 != UF2_MAGIC_START1 or end_magic != UF2_MAGIC_END:
+            raise FirmwareError(f"{label} is not a valid UF2: bad magic in block #{block_count}.")
+        if payload_size <= 0 or payload_size > 476:
+            raise FirmwareError(f"{label} is not a valid UF2: invalid payload size {payload_size}.")
+        if num_blocks <= 0 or block_no >= num_blocks:
+            raise FirmwareError(f"{label} is not a valid UF2: invalid block numbering.")
+        if expected_blocks is None:
+            expected_blocks = num_blocks
+        elif expected_blocks != num_blocks:
+            raise FirmwareError(f"{label} is not a valid UF2: inconsistent block count.")
+
+        seen_blocks.add(block_no)
+        if flags & UF2_FLAG_FAMILY_ID_PRESENT:
+            family_ids.add(family_or_size)
+
+    if block_count == 0:
+        raise FirmwareError(f"{label} is empty; expected UF2 firmware.")
+    if expected_blocks is not None and len(seen_blocks) != expected_blocks:
+        raise FirmwareError(
+            f"{label} is not a valid UF2: expected {expected_blocks} blocks, found {len(seen_blocks)}."
+        )
+    if expected_family is not None:
+        if not family_ids:
+            raise FirmwareError(f"{label} is missing a UF2 family ID; expected 0x{expected_family:08X}.")
+        if expected_family not in family_ids:
+            actual = ", ".join(f"0x{family_id:08X}" for family_id in sorted(family_ids))
+            raise FirmwareError(
+                f"{label} has UF2 family {actual}; expected 0x{expected_family:08X}."
+            )
 
 
 def _should_skip_discovered_path(path: Path) -> bool:
@@ -1109,6 +1202,9 @@ def launch_gui() -> int:
         if platform.system().lower() == "windows":
             script = default_firmware_root() / "firmware_installer_windows.ps1"
             if script.exists():
+                env = os.environ.copy()
+                if getattr(sys, "frozen", False):
+                    env["FIRMWARE_INSTALLER_EXE"] = str(Path(sys.executable).resolve())
                 subprocess.Popen(
                     [
                         "powershell.exe",
@@ -1120,6 +1216,7 @@ def launch_gui() -> int:
                         str(script),
                     ],
                     cwd=str(default_firmware_root()),
+                    env=env,
                 )
                 return 0
         print("Tkinter is not available. Use --firmware for CLI mode.", file=sys.stderr)

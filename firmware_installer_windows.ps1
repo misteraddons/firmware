@@ -6,11 +6,16 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PythonScript = Join-Path $RepoRoot 'firmware_installer.py'
 $env:PYTHONIOENCODING = 'utf-8'
+$InstallerExe = $env:FIRMWARE_INSTALLER_EXE
 
 function Invoke-InstallerPython {
     param([string[]]$Arguments)
 
-    $output = & python $PythonScript @Arguments 2>&1
+    if ($InstallerExe -and (Test-Path -LiteralPath $InstallerExe)) {
+        $output = & $InstallerExe @Arguments 2>&1
+    } else {
+        $output = & python $PythonScript @Arguments 2>&1
+    }
     if ($LASTEXITCODE -ne 0) {
         throw ($output -join [Environment]::NewLine)
     }
@@ -155,10 +160,17 @@ function Start-InstallerProcess {
         $script:ActiveErr = 0L
     }
 
-    $argText = (@($PythonScript) + $Arguments | ForEach-Object { Quote-Arg $_ }) -join ' '
-    Add-LogLine "python $argText"
+    if ($InstallerExe -and (Test-Path -LiteralPath $InstallerExe)) {
+        $filePath = $InstallerExe
+        $argText = ($Arguments | ForEach-Object { Quote-Arg $_ }) -join ' '
+        Add-LogLine "$filePath $argText"
+    } else {
+        $filePath = 'python'
+        $argText = (@($PythonScript) + $Arguments | ForEach-Object { Quote-Arg $_ }) -join ' '
+        Add-LogLine "python $argText"
+    }
 
-    $script:ActiveProcess = Start-Process -FilePath 'python' `
+    $script:ActiveProcess = Start-Process -FilePath $filePath `
         -ArgumentList $argText `
         -WorkingDirectory $RepoRoot `
         -RedirectStandardOutput $script:ActiveOut `
@@ -210,7 +222,9 @@ function Poll-InstallerProcess {
     }
 
     if ($script:ActiveProcess.HasExited) {
+        $script:ActiveProcess.WaitForExit()
         $exitCode = $script:ActiveProcess.ExitCode
+        if ($null -eq $exitCode) { $exitCode = 0 }
         $mode = $script:ActiveMode
         $script:ActiveProcess.Dispose()
         $script:ActiveProcess = $null

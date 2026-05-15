@@ -1,0 +1,26 @@
+name: Audit Firmware Sources
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "22 10 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out mirror
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Compare mirrored firmware against sources
+        env:
+          GITHUB_TOKEN: ${{ secrets.SOURCE_REPO_TOKEN || github.token }}
+        run: python tools/audit_firmware_sources.py

@@ -23,7 +23,8 @@
           "ref": "main",
           "path": "mistercade_v2/firmware/GP2040-CE_0.7.12_MiSTercadeV2.uf2"
         }
-      ]
+      ],
+      "expected_uf2_family": "0xE48BFF56"
     },
     {
       "id": "mistercade-v1-2025",
@@ -87,7 +88,8 @@
           "release": "latest",
           "asset_regex": "^GP2040-CE_.*_ReflexEncodeV1\\.2\\.uf2$"
         }
-      ]
+      ],
+      "expected_uf2_family": "0xE48BFF56"
     },
     {
       "id": "reflex-encode-v2",
@@ -105,7 +107,8 @@
           "release": "latest",
           "asset_regex": "^GP2040-CE_.*_ReflexEncodeV2\\.0\\.uf2$"
         }
-      ]
+      ],
+      "expected_uf2_family": "0xE48BFF56"
     },
     {
       "id": "reflex-ctrl-genesis6",
@@ -123,7 +126,8 @@
           "release": "latest",
           "asset_regex": "^GP2040-CE_.*_ReflexCtrlGenesis6\\.uf2$"
         }
-      ]
+      ],
+      "expected_uf2_family": "0xE48BFF56"
     },
     {
       "id": "reflex-ctrl-nes",
@@ -141,7 +145,8 @@
           "release": "latest",
           "asset_regex": "^GP2040-CE_.*_ReflexCtrlNES\\.uf2$"
         }
-      ]
+      ],
+      "expected_uf2_family": "0xE48BFF56"
     },
     {
       "id": "reflex-ctrl-snes",
@@ -159,7 +164,8 @@
           "release": "latest",
           "asset_regex": "^GP2040-CE_.*_ReflexCtrlSNES\\.uf2$"
         }
-      ]
+      ],
+      "expected_uf2_family": "0xE48BFF56"
     },
     {
       "id": "reflex-ctrl-saturn",
@@ -177,7 +183,8 @@
           "release": "latest",
           "asset_regex": "^GP2040-CE_.*_ReflexCtrlSaturn\\.uf2$"
         }
-      ]
+      ],
+      "expected_uf2_family": "0xE48BFF56"
     },
     {
       "id": "reflex-ctrl-vb",
@@ -195,7 +202,8 @@
           "release": "latest",
           "asset_regex": "^GP2040-CE_.*_ReflexCtrlVB\\.uf2$"
         }
-      ]
+      ],
+      "expected_uf2_family": "0xE48BFF56"
     },
     {
       "id": "reflex-prism",
@@ -214,7 +222,8 @@
           "directory": "reflex-prism",
           "file_name": "prism_dac.uf2"
         }
-      ]
+      ],
+      "expected_uf2_family": "0xE48BFF56"
     }
   ]
 }

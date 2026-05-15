@@ -1,0 +1,52 @@
+name: Build Windows Installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "installer-v*"
+      - "firmware-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out firmware repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build onedir EXE
+        shell: pwsh
+        run: .\build_windows_exe.ps1
+
+      - name: Package installer
+        shell: pwsh
+        run: |
+          Compress-Archive -Path .\dist\FirmwareInstaller\* -DestinationPath .\FirmwareInstaller-windows.zip -Force
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FirmwareInstaller-windows
+          path: FirmwareInstaller-windows.zip
+
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          gh release create $env:GITHUB_REF_NAME `
+            .\FirmwareInstaller-windows.zip `
+            .\firmware_catalog.json `
+            .\checksums.sha256 `
+            --repo $env:GITHUB_REPOSITORY `
+            --title $env:GITHUB_REF_NAME `
+            --notes "Firmware installer build for $env:GITHUB_REF_NAME"
