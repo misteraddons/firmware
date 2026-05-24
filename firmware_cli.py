@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Terminal-only firmware updater.
 
-Default behavior is the common macOS Prism path:
+Default behavior lists available products:
 
     python3 firmware_cli.py
 
-That flashes the Reflex Prism catalog item once and exits. Pass any
-firmware_installer.py CLI arguments to override the default.
+Pass firmware_installer.py CLI arguments to download or flash firmware.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ from typing import Sequence
 from firmware_installer import main as installer_main
 
 
-DEFAULT_ARGS = ("--product", "reflex-prism", "--once")
+DEFAULT_ARGS = ("--list-catalog",)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

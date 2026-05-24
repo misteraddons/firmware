@@ -218,6 +218,33 @@ SKIP_DISCOVERY_DIRS = {".git", "__pycache__", "__macosx"}
 CATALOG_FILE = "firmware_catalog.json"
 USER_AGENT = "MiSTerAddonsFirmwareInstaller/1.0"
 GITHUB_API = "https://api.github.com/repos"
+PRISM_POST_FLASH_CHECK = {
+    "type": "serial_console",
+    "label": "Reflex Prism CDC sanity check",
+    "vid": "0x16D0",
+    "pid": "0x14F6",
+    "baud": 115200,
+    "timeout": 30,
+    "open_settle": 2.5,
+    "command_timeout": 8,
+    "commands": [
+        {
+            "command": "status",
+            "expect": [
+                "=== Status ===",
+                "EDID Route",
+                "Sync Mode",
+            ],
+        },
+        {
+            "command": "dashboard config get",
+            "expect": [
+                "[DASHBOARD] CONFIG BEGIN",
+                "[DASHBOARD] CONFIG END",
+            ],
+        },
+    ],
+}
 
 
 def default_firmware_root() -> Path:
@@ -267,7 +294,7 @@ def catalog_path(root: Optional[Path] = None) -> Path:
 def load_catalog(root: Optional[Path] = None) -> List[CatalogItem]:
     path = catalog_path(root)
     if not path.exists():
-        return []
+        return builtin_catalog_items()
 
     with path.open("r", encoding="utf-8") as stream:
         data = json.load(stream)
@@ -329,7 +356,34 @@ def get_catalog_item(item_id: str, root: Optional[Path] = None) -> CatalogItem:
     for item in load_catalog(root):
         if item.item_id == item_id:
             return item
+    for item in builtin_catalog_items():
+        if item.item_id == item_id:
+            return item
     raise FirmwareError(f"Unknown catalog firmware: {item_id}")
+
+
+def builtin_catalog_items() -> List[CatalogItem]:
+    return [
+        CatalogItem(
+            item_id="reflex-prism",
+            label="Reflex Prism",
+            install_method="rp2040",
+            file_type="uf2",
+            controller_check=False,
+            sources=(
+                {
+                    "type": "github_repo_latest_semver_file",
+                    "repo": "misteraddons/firmware",
+                    "ref": "main",
+                    "directory": "reflex-prism",
+                    "file_name": "prism_dac.uf2",
+                },
+            ),
+            local_paths=("reflex-prism/v1.10.5/prism_dac.uf2",),
+            post_flash_check=PRISM_POST_FLASH_CHECK,
+            expected_uf2_family=RP2040_UF2_FAMILY_ID,
+        )
+    ]
 
 
 def find_catalog_source(item: CatalogItem, root: Optional[Path] = None) -> Tuple[Optional[FirmwareSource], str]:

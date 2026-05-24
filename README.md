@@ -54,7 +54,7 @@ The catalog is in `firmware_catalog.json`. GP2040-CE products ship local mirrors
 
 MiSTercade V1 and Reflex Adapt V1.x are 32u4 packages. The frontend can cache/download them, but this RPI-RP2 installer does not flash 32u4 firmware yet.
 
-Terminal CLI mode is also available. With no arguments, `firmware_cli.py` flashes the Reflex Prism catalog item once and exits:
+Terminal CLI mode is also available. With no arguments, `firmware_cli.py` lists available products:
 
 ```sh
 python3 firmware_cli.py
@@ -62,6 +62,8 @@ python3 firmware_cli.py --list-catalog
 python3 firmware_cli.py --product reflex-prism --once
 python3 firmware_cli.py --firmware path/to/firmware.uf2 --once
 ```
+
+When `reflex-prism` is selected, the CLI downloads the latest Prism `prism_dac.uf2` from this GitHub repo when needed, flashes it, runs the Prism USB CDC sanity check, and exits when `--once` is used.
 
 The original installer script also accepts the same headless arguments:
 
