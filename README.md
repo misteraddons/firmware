@@ -38,15 +38,15 @@ python firmware_installer.py
 
 macOS:
 
-- Install Python 3 with Tkinter support. The Python.org installer includes Tkinter; some Homebrew Python setups may require Tcl/Tk setup separately.
+- Install Python 3.
 - Install `pyserial`; Prism firmware updates require it for the post-flash USB CDC sanity check:
 
 ```sh
 python3 -m pip install pyserial
-python3 firmware_installer.py
+python3 firmware_cli.py
 ```
 
-On macOS, the RP2040 bootloader should appear as `/Volumes/RPI-RP2`. There is currently no signed/notarized macOS app or DMG; run the updater from source.
+On macOS, the RP2040 bootloader should appear as `/Volumes/RPI-RP2`. There is currently no signed/notarized macOS app or DMG; use the Terminal CLI from source.
 
 Cross-platform firmware installer: run `python firmware_installer.py`, choose a product from the dropdown, then connect each RP2040 board in BOOTSEL mode. The app uses cached firmware when available, downloads the selected firmware when missing, waits for `RPI-RP2`, copies the UF2, waits for the bootloader drive to detach, then waits for controller/gamepad enumeration for controller firmware before showing a green check and returning to the next-drive wait.
 
@@ -54,7 +54,16 @@ The catalog is in `firmware_catalog.json`. GP2040-CE products ship local mirrors
 
 MiSTercade V1 and Reflex Adapt V1.x are 32u4 packages. The frontend can cache/download them, but this RPI-RP2 installer does not flash 32u4 firmware yet.
 
-Headless mode is also available:
+Terminal CLI mode is also available. With no arguments, `firmware_cli.py` flashes the Reflex Prism catalog item once and exits:
+
+```sh
+python3 firmware_cli.py
+python3 firmware_cli.py --list-catalog
+python3 firmware_cli.py --product reflex-prism --once
+python3 firmware_cli.py --firmware path/to/firmware.uf2 --once
+```
+
+The original installer script also accepts the same headless arguments:
 
 ```sh
 python firmware_installer.py --firmware path/to/firmware.uf2
