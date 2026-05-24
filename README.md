@@ -6,7 +6,7 @@ Firmware files and a small cross-platform installer/cache for MiSTer Addons prod
 
 | Project | Local file | Source |
 | --- | --- | --- |
-| Reflex Prism | `reflex-prism/v1.10.4/prism_dac.uf2` | [`misteraddons/Reflex-Prism` v1.10.4](https://github.com/misteraddons/Reflex-Prism/releases/tag/v1.10.4) |
+| Reflex Prism | `reflex-prism/v1.10.5/prism_dac.uf2` | [`misteraddons/Reflex-Prism` v1.10.5](https://github.com/misteraddons/Reflex-Prism/releases/tag/v1.10.5) |
 | Reflex Adapt | `reflex-adapt/v2.01/reflex_updater.sh` | [`misteraddons/Reflex-Adapt` v2.01](https://github.com/misteraddons/Reflex-Adapt/releases/tag/v2.01) |
 | Reflex Adapt | `reflex-adapt/v2.01/reflex-v2.01.zip` | [`misteraddons/Reflex-Adapt` v2.01](https://github.com/misteraddons/Reflex-Adapt/releases/tag/v2.01) |
 | Reflex Adapt | `reflex-adapt/v2.01/reflex-v2.01.tar.gz` | [`misteraddons/Reflex-Adapt` v2.01](https://github.com/misteraddons/Reflex-Adapt/releases/tag/v2.01) |
@@ -48,7 +48,7 @@ Build a Windows executable:
 
 The executable is a PyInstaller onedir build. It bundles the catalog and Windows GUI script, then uses `FirmwareInstaller.exe` itself for catalog, download, and flash subprocesses. No system Python install is required for the built app.
 
-Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. The upstream v1.10.4 release adds stable Auto sync behavior, keeps VGA routes in Pass Sync, and includes the pre-release sync shakedown matrix.
+Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. The upstream v1.10.5 release adds sync stability monitoring, long-run shakedown tooling, and release QA helpers.
 
 Reflex Prism update checks use `firmware_catalog.json` source type `github_repo_latest_semver_file`. The installer lists `misteraddons/firmware/reflex-prism`, sorts version directories semantically, and downloads `prism_dac.uf2` from the highest version directory. Downloads and local UF2 files are validated as structurally valid UF2 images and, for RP2040 entries, must carry UF2 family ID `0xE48BFF56`. Prism flash validation is limited to the RP2040 bootloader accepting the UF2 and detaching; Prism does not enumerate as a gamepad after flashing.
 
