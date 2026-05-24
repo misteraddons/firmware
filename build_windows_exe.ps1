@@ -13,6 +13,8 @@ if (-not $hasPyInstaller) {
     python -m pip install pyinstaller
 }
 
+python -m pip install pyserial
+
 python -m PyInstaller `
     --noconfirm `
     --clean `

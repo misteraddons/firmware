@@ -131,6 +131,7 @@ class FirmwareChoice:
     item_id: Optional[str] = None
     install_method: str = "rp2040"
     controller_check: Optional[bool] = None
+    post_flash_check: Optional[dict] = None
     status: str = "custom"
 
 
@@ -143,6 +144,7 @@ class CatalogItem:
     controller_check: bool
     sources: Sequence[dict]
     local_paths: Sequence[str]
+    post_flash_check: Optional[dict] = None
     notes: str = ""
     expected_uf2_family: Optional[int] = None
 
@@ -281,6 +283,7 @@ def load_catalog(root: Optional[Path] = None) -> List[CatalogItem]:
                 controller_check=bool(raw.get("controller_check", False)),
                 sources=tuple(raw.get("sources", [])),
                 local_paths=tuple(raw.get("local_paths", [])),
+                post_flash_check=raw.get("post_flash_check"),
                 notes=raw.get("notes", ""),
                 expected_uf2_family=parse_optional_int(raw.get("expected_uf2_family")),
             )
@@ -315,6 +318,7 @@ def catalog_firmware_choices(items: Sequence[CatalogItem], root: Optional[Path] 
                 item_id=item.item_id,
                 install_method=item.install_method,
                 controller_check=item.controller_check,
+                post_flash_check=item.post_flash_check,
                 status=status,
             )
         )
@@ -1153,9 +1157,135 @@ def format_controllers(controllers: Iterable[Controller]) -> str:
     return ", ".join(names) if names else "unknown controller"
 
 
+def _parse_post_flash_int(value: object, field: str) -> int:
+    parsed = parse_optional_int(value)
+    if parsed is None:
+        raise FirmwareError(f"Post-flash check is missing {field}.")
+    return parsed
+
+
+def _require_pyserial():
+    try:
+        import serial  # type: ignore
+        from serial.tools import list_ports  # type: ignore
+    except ImportError as exc:
+        raise FirmwareError(
+            "Prism post-flash serial checks require pyserial. "
+            "Install it with: python -m pip install pyserial"
+        ) from exc
+    return serial, list_ports
+
+
+def wait_for_serial_vid_pid(
+    vid: int,
+    pid: int,
+    *,
+    timeout_s: float,
+    stop_event: threading.Event,
+    log: Callable[[str], None],
+    poll_seconds: float = 0.5,
+) -> str:
+    _serial, list_ports = _require_pyserial()
+    deadline = time.time() + timeout_s
+    last_log = 0.0
+
+    while time.time() < deadline:
+        _raise_if_stopped(stop_event)
+        for port in list_ports.comports():
+            if port.vid == vid and port.pid == pid:
+                return str(port.device)
+
+        now = time.time()
+        if now - last_log >= 5.0:
+            log(f"Waiting for USB serial VID:PID {vid:04X}:{pid:04X}...")
+            last_log = now
+        stop_event.wait(poll_seconds)
+
+    raise FirmwareError(f"Timed out waiting for USB serial VID:PID {vid:04X}:{pid:04X}.")
+
+
+def serial_read_until_idle(port, *, idle_s: float, timeout_s: float) -> str:
+    start = time.time()
+    last_rx = start
+    chunks: List[str] = []
+
+    while time.time() - start < timeout_s:
+        waiting = port.in_waiting
+        if waiting:
+            chunks.append(port.read(waiting).decode("utf-8", errors="ignore"))
+            last_rx = time.time()
+        elif chunks and time.time() - last_rx >= idle_s:
+            break
+        time.sleep(0.05)
+
+    return "".join(chunks)
+
+
+def serial_send_command(port, command: str, *, timeout_s: float) -> str:
+    serial_read_until_idle(port, idle_s=0.1, timeout_s=0.4)
+    port.write((command + "\r\n").encode("utf-8"))
+    port.flush()
+    time.sleep(0.05)
+    return serial_read_until_idle(port, idle_s=1.0, timeout_s=timeout_s)
+
+
+def run_serial_console_post_flash_check(
+    check: dict,
+    *,
+    stop_event: threading.Event,
+    log: Callable[[str], None],
+) -> None:
+    serial, _list_ports = _require_pyserial()
+    label = str(check.get("label") or "USB serial console")
+    vid = _parse_post_flash_int(check.get("vid"), "vid")
+    pid = _parse_post_flash_int(check.get("pid"), "pid")
+    baud = int(check.get("baud", 115200))
+    timeout_s = float(check.get("timeout", 30.0))
+    open_settle_s = float(check.get("open_settle", 2.0))
+    command_timeout_s = float(check.get("command_timeout", 8.0))
+    commands = check.get("commands") or []
+
+    port_name = wait_for_serial_vid_pid(vid, pid, timeout_s=timeout_s, stop_event=stop_event, log=log)
+    log(f"Post-flash check found {label} on {port_name}.")
+
+    with serial.Serial(port_name, baudrate=baud, timeout=0.1, write_timeout=2) as port:
+        time.sleep(open_settle_s)
+        serial_read_until_idle(port, idle_s=0.2, timeout_s=1.0)
+        for entry in commands:
+            _raise_if_stopped(stop_event)
+            command = str(entry.get("command", "")).strip()
+            if not command:
+                continue
+            response = serial_send_command(port, command, timeout_s=command_timeout_s)
+            missing = [marker for marker in entry.get("expect", []) if str(marker) not in response]
+            if missing:
+                raise FirmwareError(
+                    f"{label} command {command!r} did not return expected text: {', '.join(missing)}"
+                )
+            log(f"Post-flash command passed: {command}")
+
+
+def run_post_flash_check(
+    check: Optional[dict],
+    *,
+    stop_event: threading.Event,
+    log: Callable[[str], None],
+) -> None:
+    if not check:
+        return
+
+    check_type = str(check.get("type", "")).lower()
+    if check_type == "serial_console":
+        run_serial_console_post_flash_check(check, stop_event=stop_event, log=log)
+        return
+
+    raise FirmwareError(f"Unsupported post-flash check type: {check_type or '<missing>'}")
+
+
 def run_install_loop(
     firmware: FirmwareSource,
     verify_controller: bool,
+    post_flash_check: Optional[dict],
     stop_event: threading.Event,
     log: Callable[[str], None],
     status: Callable[[str, str], None],
@@ -1184,7 +1314,19 @@ def run_install_loop(
             status("Waiting for controller/gamepad enumeration...", "orange")
             detected = wait_for_new_controller(baseline, stop_event, log)
             log(f"Controller detected: {format_controllers(detected)}")
+
+        if post_flash_check:
+            label = str(post_flash_check.get("label") or "post-flash sanity check")
+            status(f"Running {label}...", "orange")
+            run_post_flash_check(post_flash_check, stop_event=stop_event, log=log)
+            log(f"Post-flash check passed: {label}")
+
+        if verify_controller and post_flash_check:
+            status(f"{CHECK_MARK} Flash complete; controller and post-flash check passed. Waiting for next RPI-RP2...", "green")
+        elif verify_controller:
             status(f"{CHECK_MARK} Flash complete; controller detected. Waiting for next RPI-RP2...", "green")
+        elif post_flash_check:
+            status(f"{CHECK_MARK} Flash complete; post-flash check passed. Waiting for next RPI-RP2...", "green")
         else:
             status(f"{CHECK_MARK} Flash complete. Waiting for next RPI-RP2...", "green")
 
@@ -1488,6 +1630,7 @@ def launch_gui() -> int:
                 run_install_loop(
                     firmware=firmware,
                     verify_controller=verify,
+                    post_flash_check=choice.post_flash_check if choice else None,
                     stop_event=self.stop_event,
                     log=self.thread_log,
                     status=self.thread_status,
@@ -1587,6 +1730,7 @@ def catalog_choice_records(root: Optional[Path] = None) -> List[dict]:
                 "label": choice.label,
                 "install_method": choice.install_method,
                 "controller_check": bool(choice.controller_check),
+                "post_flash_check": bool(choice.post_flash_check),
                 "status": choice.status,
                 "source": source,
             }
@@ -1596,6 +1740,7 @@ def catalog_choice_records(root: Optional[Path] = None) -> List[dict]:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv or sys.argv[1:])
+    post_flash_check: Optional[dict] = None
     if args.catalog_json:
         print(json.dumps(catalog_choice_records(), indent=2))
         return 0
@@ -1632,6 +1777,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             verify_controller = False
         else:
             verify_controller = item.controller_check
+        post_flash_check = item.post_flash_check
     elif not args.firmware:
         return launch_gui()
     else:
@@ -1658,6 +1804,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         run_install_loop(
             firmware=firmware,
             verify_controller=verify_controller,
+            post_flash_check=post_flash_check,
             stop_event=stop_event,
             log=_print_log,
             status=_print_status,

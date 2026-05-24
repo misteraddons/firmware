@@ -24,6 +24,30 @@ Firmware files and a small cross-platform installer/cache for MiSTer Addons prod
 
 ## Install Notes
 
+### Prerequisites
+
+Windows:
+
+- Use the bundled `FirmwareInstaller.exe` from `FirmwareInstaller-windows.zip` when available; it includes Python, the catalog, the Windows GUI wrapper, and `pyserial`.
+- To run from source, install Python 3 with Tkinter support, then install serial support:
+
+```powershell
+python -m pip install pyserial
+python firmware_installer.py
+```
+
+macOS:
+
+- Install Python 3 with Tkinter support. The Python.org installer includes Tkinter; some Homebrew Python setups may require Tcl/Tk setup separately.
+- Install `pyserial`; Prism firmware updates require it for the post-flash USB CDC sanity check:
+
+```sh
+python3 -m pip install pyserial
+python3 firmware_installer.py
+```
+
+On macOS, the RP2040 bootloader should appear as `/Volumes/RPI-RP2`. There is currently no signed/notarized macOS app or DMG; run the updater from source.
+
 Cross-platform firmware installer: run `python firmware_installer.py`, choose a product from the dropdown, then connect each RP2040 board in BOOTSEL mode. The app uses cached firmware when available, downloads the selected firmware when missing, waits for `RPI-RP2`, copies the UF2, waits for the bootloader drive to detach, then waits for controller/gamepad enumeration for controller firmware before showing a green check and returning to the next-drive wait.
 
 The catalog is in `firmware_catalog.json`. GP2040-CE products ship local mirrors and can still resolve from the latest [`OpenStickCommunity/GP2040-CE`](https://github.com/OpenStickCommunity/GP2040-CE/releases/latest) release by asset name.
@@ -50,7 +74,7 @@ The executable is a PyInstaller onedir build. It bundles the catalog and Windows
 
 Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. The upstream v1.10.5 release adds sync stability monitoring, long-run shakedown tooling, and release QA helpers.
 
-Reflex Prism update checks use `firmware_catalog.json` source type `github_repo_latest_semver_file`. The installer lists `misteraddons/firmware/reflex-prism`, sorts version directories semantically, and downloads `prism_dac.uf2` from the highest version directory. Downloads and local UF2 files are validated as structurally valid UF2 images and, for RP2040 entries, must carry UF2 family ID `0xE48BFF56`. Prism flash validation is limited to the RP2040 bootloader accepting the UF2 and detaching; Prism does not enumerate as a gamepad after flashing.
+Reflex Prism update checks use `firmware_catalog.json` source type `github_repo_latest_semver_file`. The installer lists `misteraddons/firmware/reflex-prism`, sorts version directories semantically, and downloads `prism_dac.uf2` from the highest version directory. Downloads and local UF2 files are validated as structurally valid UF2 images and, for RP2040 entries, must carry UF2 family ID `0xE48BFF56`. After flashing Prism, the installer waits for USB CDC VID:PID `16D0:14F6`, opens the serial console, and sanity-checks `status` plus `dashboard config get`. Source runs need `pyserial`; the Windows bundled installer includes it.
 
 Reflex Adapt: copy `reflex_updater.sh` to the `Scripts` folder on the MiSTer SD card, or use `reflex-v2.01.zip` for the desktop updater package.
 

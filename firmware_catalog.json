@@ -214,6 +214,33 @@
       "local_paths": [
         "reflex-prism/v1.10.5/prism_dac.uf2"
       ],
+      "post_flash_check": {
+        "type": "serial_console",
+        "label": "Reflex Prism CDC sanity check",
+        "vid": "0x16D0",
+        "pid": "0x14F6",
+        "baud": 115200,
+        "timeout": 30,
+        "open_settle": 2.5,
+        "command_timeout": 8,
+        "commands": [
+          {
+            "command": "status",
+            "expect": [
+              "=== Status ===",
+              "EDID Route",
+              "Sync Mode"
+            ]
+          },
+          {
+            "command": "dashboard config get",
+            "expect": [
+              "[DASHBOARD] CONFIG BEGIN",
+              "[DASHBOARD] CONFIG END"
+            ]
+          }
+        ]
+      },
       "sources": [
         {
           "type": "github_repo_latest_semver_file",
