@@ -1,0 +1,78 @@
+name: Sync Prism Firmware
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Reflex-Prism release tag to mirror. Defaults to latest release."
+        required: false
+        type: string
+  repository_dispatch:
+    types: [reflex-prism-release]
+  schedule:
+    - cron: "37 10 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-prism-firmware
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out firmware mirror
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.FIRMWARE_REPO_TOKEN || github.token }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Sync Prism firmware mirror
+        env:
+          GH_TOKEN: ${{ secrets.SOURCE_REPO_TOKEN || secrets.FIRMWARE_REPO_TOKEN || github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+          DISPATCH_TAG: ${{ github.event.client_payload.tag }}
+        shell: bash
+        run: |
+          tag="${INPUT_TAG:-${DISPATCH_TAG:-}}"
+          if [ -n "${tag}" ]; then
+            python tools/sync_prism_firmware.py --tag "${tag}"
+          else
+            python tools/sync_prism_firmware.py
+          fi
+
+      - name: Verify mirror audit
+        env:
+          GH_TOKEN: ${{ secrets.SOURCE_REPO_TOKEN || secrets.FIRMWARE_REPO_TOKEN || github.token }}
+        run: python tools/audit_firmware_sources.py
+
+      - name: Commit mirror update
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md firmware_catalog.json checksums.sha256 reflex-prism
+          if git diff --cached --quiet; then
+            echo "Firmware mirror is already current."
+            exit 0
+          fi
+          tag="$(python - <<'PY'
+          import json
+          from pathlib import Path
+
+          catalog = json.loads(Path("firmware_catalog.json").read_text())
+          for item in catalog["items"]:
+              if item["id"] == "reflex-prism":
+                  print(item["local_paths"][0].split("/")[1])
+                  break
+          PY
+          )"
+          git commit -m "Mirror Reflex Prism firmware ${tag}"
+          git push

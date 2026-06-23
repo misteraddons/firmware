@@ -6,10 +6,10 @@ Firmware files and a small cross-platform installer/cache for MiSTer Addons prod
 
 | Project | Local file | Source |
 | --- | --- | --- |
-| Reflex Prism | `reflex-prism/v1.10.5/prism_dac.uf2` | [`misteraddons/Reflex-Prism` v1.10.5](https://github.com/misteraddons/Reflex-Prism/releases/tag/v1.10.5) |
-| Reflex Adapt | `reflex-adapt/v2.01/reflex_updater.sh` | [`misteraddons/Reflex-Adapt` v2.01](https://github.com/misteraddons/Reflex-Adapt/releases/tag/v2.01) |
-| Reflex Adapt | `reflex-adapt/v2.01/reflex-v2.01.zip` | [`misteraddons/Reflex-Adapt` v2.01](https://github.com/misteraddons/Reflex-Adapt/releases/tag/v2.01) |
-| Reflex Adapt | `reflex-adapt/v2.01/reflex-v2.01.tar.gz` | [`misteraddons/Reflex-Adapt` v2.01](https://github.com/misteraddons/Reflex-Adapt/releases/tag/v2.01) |
+| Reflex Prism | `reflex-prism/v1.10.7/prism_dac.uf2` | [`misteraddons/Reflex-Prism` v1.10.7](https://github.com/misteraddons/Reflex-Prism/releases/tag/v1.10.7) |
+| Reflex Adapt | `reflex-adapt/v2.01/reflex_updater.sh` | [`misteraddons/Reflex-Adapt-Legacy` v2.01](https://github.com/misteraddons/Reflex-Adapt-Legacy/releases/tag/v2.01) |
+| Reflex Adapt | `reflex-adapt/v2.01/reflex-v2.01.zip` | [`misteraddons/Reflex-Adapt-Legacy` v2.01](https://github.com/misteraddons/Reflex-Adapt-Legacy/releases/tag/v2.01) |
+| Reflex Adapt | `reflex-adapt/v2.01/reflex-v2.01.tar.gz` | [`misteraddons/Reflex-Adapt-Legacy` v2.01](https://github.com/misteraddons/Reflex-Adapt-Legacy/releases/tag/v2.01) |
 | Reflex CTRL Genesis 6 | `reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlGenesis6.uf2` | [`OpenStickCommunity/GP2040-CE` v0.7.12](https://github.com/OpenStickCommunity/GP2040-CE/releases/download/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlGenesis6.uf2) |
 | Reflex CTRL NES | `reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlNES.uf2` | [`OpenStickCommunity/GP2040-CE` v0.7.12](https://github.com/OpenStickCommunity/GP2040-CE/releases/download/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlNES.uf2) |
 | Reflex CTRL SNES | `reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlSNES.uf2` | [`OpenStickCommunity/GP2040-CE` v0.7.12](https://github.com/OpenStickCommunity/GP2040-CE/releases/download/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlSNES.uf2) |
@@ -59,11 +59,13 @@ Terminal CLI mode is also available. With no arguments, `firmware_cli.py` lists 
 ```sh
 python3 firmware_cli.py
 python3 firmware_cli.py --list-catalog
-python3 firmware_cli.py --product reflex-prism --once
-python3 firmware_cli.py --firmware path/to/firmware.uf2 --once
+python3 firmware_cli.py --product reflex-prism
+python3 firmware_cli.py --firmware path/to/firmware.uf2
 ```
 
-When `reflex-prism` is selected, the CLI downloads the latest Prism `prism_dac.uf2` from this GitHub repo when needed, flashes it, runs the Prism USB CDC sanity check, and exits when `--once` is used.
+Flashing is continuous by default: after one device completes, the CLI waits for the next `RPI-RP2` bootloader drive. Add `--once` only when you want to flash one device and exit.
+
+When `reflex-prism` is selected, the CLI downloads the latest Prism `prism_dac.uf2` from this GitHub repo when needed, flashes it, and runs the Prism USB CDC sanity check.
 
 The original installer script also accepts the same headless arguments:
 
@@ -71,7 +73,7 @@ The original installer script also accepts the same headless arguments:
 python firmware_installer.py --firmware path/to/firmware.uf2
 python firmware_installer.py --list-catalog
 python firmware_installer.py --product reflex-ctrl-nes --download
-python firmware_installer.py --product reflex-ctrl-nes --once
+python firmware_installer.py --product reflex-ctrl-nes
 ```
 
 Build a Windows executable:
@@ -82,10 +84,9 @@ Build a Windows executable:
 ```
 
 The executable is a PyInstaller onedir build. It bundles the catalog and Windows GUI script, then uses `FirmwareInstaller.exe` itself for catalog, download, and flash subprocesses. No system Python install is required for the built app.
+Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. The latest mirrored release is `v1.10.7`.
 
-Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. The upstream v1.10.5 release adds sync stability monitoring, long-run shakedown tooling, and release QA helpers.
-
-Reflex Prism update checks use `firmware_catalog.json` source type `github_repo_latest_semver_file`. The installer lists `misteraddons/firmware/reflex-prism`, sorts version directories semantically, and downloads `prism_dac.uf2` from the highest version directory. Downloads and local UF2 files are validated as structurally valid UF2 images and, for RP2040 entries, must carry UF2 family ID `0xE48BFF56`. After flashing Prism, the installer waits for USB CDC VID:PID `16D0:14F6`, opens the serial console, and sanity-checks `status` plus `dashboard config get`. Source runs need `pyserial`; the Windows bundled installer includes it.
+Reflex Prism update checks use `firmware_catalog.json` source type `github_repo_latest_semver_file`. The installer lists `misteraddons/firmware/reflex-prism`, sorts version directories semantically, and downloads `prism_dac.uf2` from the highest version directory. `tools/sync_prism_firmware.py` mirrors the latest `misteraddons/Reflex-Prism` release into this repo and updates the catalog, README, and checksums together. Downloads and local UF2 files are validated as structurally valid UF2 images and, for RP2040 entries, must carry UF2 family ID `0xE48BFF56`. After flashing Prism, the installer waits for USB CDC VID:PID `16D0:14F6`, opens the serial console, and sanity-checks `status` plus `dashboard config get`. Source runs need `pyserial`; the Windows bundled installer includes it.
 
 Reflex Adapt: copy `reflex_updater.sh` to the `Scripts` folder on the MiSTer SD card, or use `reflex-v2.01.zip` for the desktop updater package.
 
@@ -103,7 +104,9 @@ Run the source audit locally:
 python tools/audit_firmware_sources.py
 ```
 
-The `Audit Firmware Sources` GitHub Action runs the same check daily and on demand. It compares mirrored files against source release digests or source repo file hashes, verifies `checksums.sha256`, and validates RP2040 UF2 family IDs. If any source repo is private, set a `SOURCE_REPO_TOKEN` secret with read access to those repos.
+The `Audit Firmware Sources` GitHub Action runs the same check daily and on demand. It compares mirrored files against source release digests or source repo file hashes, verifies `checksums.sha256`, and validates RP2040 UF2 family IDs. If any source repo is private, set a `SOURCE_REPO_TOKEN` or `FIRMWARE_REPO_TOKEN` secret with read access to those repos.
+
+The `Sync Prism Firmware` GitHub Action runs daily, on demand, and from `repository_dispatch` event type `reflex-prism-release`. It mirrors the latest or requested Reflex-Prism release, runs the source audit, and commits only when the mirror changes.
 
 The `Build Windows Installer` GitHub Action builds `FirmwareInstaller-windows.zip` on demand. Pushing a tag named `installer-v*` or `firmware-v*` also creates a GitHub release with the installer zip, catalog, and checksums.
 

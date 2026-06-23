@@ -22,5 +22,5 @@ jobs:
 
       - name: Compare mirrored firmware against sources
         env:
-          GITHUB_TOKEN: ${{ secrets.SOURCE_REPO_TOKEN || github.token }}
+          GITHUB_TOKEN: ${{ secrets.SOURCE_REPO_TOKEN || secrets.FIRMWARE_REPO_TOKEN || github.token }}
         run: python tools/audit_firmware_sources.py

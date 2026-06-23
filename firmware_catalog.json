@@ -58,7 +58,7 @@
       "sources": [
         {
           "type": "github_release_asset",
-          "repo": "misteraddons/Reflex-Adapt",
+          "repo": "misteraddons/Reflex-Adapt-Legacy",
           "release": "latest",
           "asset_regex": "^reflex-v.*\\.zip$"
         }
@@ -212,7 +212,7 @@
       "file_type": "uf2",
       "controller_check": false,
       "local_paths": [
-        "reflex-prism/v1.10.5/prism_dac.uf2"
+        "reflex-prism/v1.10.7/prism_dac.uf2"
       ],
       "post_flash_check": {
         "type": "serial_console",

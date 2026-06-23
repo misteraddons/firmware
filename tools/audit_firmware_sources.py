@@ -27,6 +27,9 @@ class SourceCheck:
     asset_regex: str = ""
     ref: str = "main"
     repo_path: str = ""
+    directory: str = ""
+    file_name: str = ""
+    catalog_item_id: str = ""
     expected_family: Optional[int] = None
 
 
@@ -79,21 +82,21 @@ CHECKS = [
         "Reflex Adapt updater",
         "reflex-adapt/v2.01/reflex_updater.sh",
         "github_release_asset",
-        "misteraddons/Reflex-Adapt",
+        "misteraddons/Reflex-Adapt-Legacy",
         asset_regex=r"^reflex_updater\.sh$",
     ),
     SourceCheck(
         "Reflex Adapt zip",
         "reflex-adapt/v2.01/reflex-v2.01.zip",
         "github_release_asset",
-        "misteraddons/Reflex-Adapt",
+        "misteraddons/Reflex-Adapt-Legacy",
         asset_regex=r"^reflex-v.*\.zip$",
     ),
     SourceCheck(
         "Reflex Adapt tarball",
         "reflex-adapt/v2.01/reflex-v2.01.tar.gz",
         "github_release_asset",
-        "misteraddons/Reflex-Adapt",
+        "misteraddons/Reflex-Adapt-Legacy",
         asset_regex=r"^reflex-v.*\.tar\.gz$",
     ),
     SourceCheck(
@@ -154,10 +157,11 @@ CHECKS = [
     ),
     SourceCheck(
         "Reflex Prism",
-        "reflex-prism/v1.10.4/prism_dac.uf2",
+        "",
         "github_release_asset",
         "misteraddons/Reflex-Prism",
         asset_regex=r"^prism_dac\.uf2$",
+        catalog_item_id="reflex-prism",
         expected_family=RP2040_UF2_FAMILY_ID,
     ),
 ]
@@ -250,11 +254,51 @@ def resolve_repo_file(check: SourceCheck) -> SourceDigest:
     return SourceDigest(f"{check.repo}@{check.ref} / {path}", sha256, size)
 
 
+def ensure_list(value: object) -> list[dict]:
+    if isinstance(value, list):
+        return [entry for entry in value if isinstance(entry, dict)]
+    if isinstance(value, dict):
+        return [value]
+    return []
+
+
+def semver_key(value: str) -> tuple[int, ...]:
+    numbers = [int(part) for part in re.findall(r"\d+", value)]
+    return tuple(numbers or [0])
+
+
+def resolve_latest_semver_file(check: SourceCheck) -> SourceDigest:
+    directory = check.directory.strip("/")
+    file_name = check.file_name
+    url = f"https://api.github.com/repos/{check.repo}/contents/{directory}?ref={check.ref}"
+    entries = ensure_list(request_json(url))
+    dirs = [entry for entry in entries if entry.get("type") == "dir"]
+    if not dirs:
+        raise RuntimeError(f"{check.label}: no version directories found in {check.repo}/{directory}")
+
+    latest = sorted(dirs, key=lambda entry: semver_key(entry.get("name", "")), reverse=True)[0]
+    path = f"{latest['path'].strip('/')}/{file_name}"
+    file_url = f"https://api.github.com/repos/{check.repo}/contents/{path}?ref={check.ref}"
+    item = request_json(file_url)
+    assert isinstance(item, dict)
+    if item.get("type") != "file":
+        raise RuntimeError(f"{check.label}: latest version does not contain {file_name}: {latest.get('name')}")
+
+    content = item.get("content")
+    if content and item.get("encoding") == "base64":
+        sha256, size = hash_bytes(base64.b64decode(content))
+    else:
+        sha256, size = hash_url(item["download_url"])
+    return SourceDigest(f"{check.repo}@{check.ref} / {path}", sha256, size)
+
+
 def resolve_source(check: SourceCheck) -> SourceDigest:
     if check.source_type == "github_release_asset":
         return resolve_release_asset(check)
     if check.source_type == "github_repo_file":
         return resolve_repo_file(check)
+    if check.source_type == "github_repo_latest_semver_file":
+        return resolve_latest_semver_file(check)
     raise RuntimeError(f"{check.label}: unsupported source type {check.source_type}")
 
 
@@ -288,24 +332,60 @@ def catalog_local_paths() -> set[str]:
     return paths
 
 
+def catalog_local_paths_by_id() -> dict[str, list[str]]:
+    catalog = json.loads((ROOT / "firmware_catalog.json").read_text(encoding="utf-8"))
+    paths_by_id: dict[str, list[str]] = {}
+    for item in catalog.get("items", []):
+        item_id = item.get("id")
+        if not isinstance(item_id, str):
+            continue
+        paths_by_id[item_id] = [path.replace("\\", "/") for path in item.get("local_paths", [])]
+    return paths_by_id
+
+
+def resolve_check_local_path(check: SourceCheck, paths_by_id: dict[str, list[str]]) -> str:
+    if check.local_path:
+        return check.local_path
+    if not check.catalog_item_id:
+        raise RuntimeError(f"{check.label}: no local path or catalog item id configured")
+
+    paths = paths_by_id.get(check.catalog_item_id, [])
+    if len(paths) != 1:
+        raise RuntimeError(
+            f"{check.label}: expected one catalog local path for {check.catalog_item_id}; got {len(paths)}"
+        )
+    return paths[0]
+
+
 def main() -> int:
     checksums = load_checksums()
     failures: list[str] = []
-    checked_paths = {check.local_path for check in CHECKS}
+    paths_by_id = catalog_local_paths_by_id()
+    checked_paths: set[str] = set()
+    for check in CHECKS:
+        try:
+            checked_paths.add(resolve_check_local_path(check, paths_by_id))
+        except Exception as error:
+            failures.append(str(error))
 
     for local_path in sorted(catalog_local_paths() - checked_paths):
         failures.append(f"{local_path}: catalog local path has no source audit check")
 
     for check in CHECKS:
-        path = ROOT / check.local_path
+        try:
+            local_path = resolve_check_local_path(check, paths_by_id)
+        except Exception:
+            continue
+
+        path = ROOT / local_path
         if not path.exists():
-            failures.append(f"{check.label}: missing {check.local_path}")
+            failures.append(f"{check.label}: missing {local_path}")
             continue
 
         try:
             validate_local_uf2(path, check.expected_family)
             local_sha, local_size = hash_file(path)
-            recorded_sha = checksums.get(check.local_path)
+            recorded_sha = checksums.get(local_path)
             source = resolve_source(check)
         except Exception as error:
             failures.append(f"{check.label}: {error}")
@@ -319,7 +399,7 @@ def main() -> int:
             failures.append(f"{check.label}: local sha256 {local_sha}; source sha256 {source.sha256} ({source.label})")
 
         if not any(failure.startswith(f"{check.label}:") for failure in failures):
-            print(f"[OK] {check.label}: {check.local_path} matches {source.label}")
+            print(f"[OK] {check.label}: {local_path} matches {source.label}")
 
     if failures:
         print()

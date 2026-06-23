@@ -1749,7 +1749,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--list-catalog", action="store_true", help="List catalog firmware options and exit.")
     parser.add_argument("--catalog-json", action="store_true", help="Print catalog firmware options as JSON and exit.")
     parser.add_argument("--zip-member", help="UF2 path inside a .zip package when multiple are present.")
-    parser.add_argument("--once", action="store_true", help="Flash one attach/detach cycle, then exit.")
+    parser.add_argument("--once", action="store_true", help="Flash one attach/detach cycle, then exit. Without this, flashing is continuous.")
 
     verify_group = parser.add_mutually_exclusive_group()
     verify_group.add_argument(
