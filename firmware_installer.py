@@ -131,6 +131,7 @@ class FirmwareChoice:
     item_id: Optional[str] = None
     install_method: str = "rp2040"
     controller_check: Optional[bool] = None
+    pre_flash_bootloader: Optional[dict] = None
     post_flash_check: Optional[dict] = None
     status: str = "custom"
 
@@ -144,6 +145,7 @@ class CatalogItem:
     controller_check: bool
     sources: Sequence[dict]
     local_paths: Sequence[str]
+    pre_flash_bootloader: Optional[dict] = None
     post_flash_check: Optional[dict] = None
     notes: str = ""
     expected_uf2_family: Optional[int] = None
@@ -218,6 +220,17 @@ SKIP_DISCOVERY_DIRS = {".git", "__pycache__", "__macosx"}
 CATALOG_FILE = "firmware_catalog.json"
 USER_AGENT = "MiSTerAddonsFirmwareInstaller/1.0"
 GITHUB_API = "https://api.github.com/repos"
+PRISM_PRE_FLASH_BOOTLOADER = {
+    "type": "serial_bootloader",
+    "label": "Reflex Prism CDC bootloader command",
+    "vid": "0x16D0",
+    "pid": "0x14F6",
+    "baud": 115200,
+    "command": "bootloader",
+    "timeout": 30,
+    "open_settle": 0.5,
+    "command_timeout": 2,
+}
 PRISM_POST_FLASH_CHECK = {
     "type": "serial_console",
     "label": "Reflex Prism CDC sanity check",
@@ -310,6 +323,7 @@ def load_catalog(root: Optional[Path] = None) -> List[CatalogItem]:
                 controller_check=bool(raw.get("controller_check", False)),
                 sources=tuple(raw.get("sources", [])),
                 local_paths=tuple(raw.get("local_paths", [])),
+                pre_flash_bootloader=raw.get("pre_flash_bootloader"),
                 post_flash_check=raw.get("post_flash_check"),
                 notes=raw.get("notes", ""),
                 expected_uf2_family=parse_optional_int(raw.get("expected_uf2_family")),
@@ -345,6 +359,7 @@ def catalog_firmware_choices(items: Sequence[CatalogItem], root: Optional[Path] 
                 item_id=item.item_id,
                 install_method=item.install_method,
                 controller_check=item.controller_check,
+                pre_flash_bootloader=item.pre_flash_bootloader,
                 post_flash_check=item.post_flash_check,
                 status=status,
             )
@@ -379,7 +394,8 @@ def builtin_catalog_items() -> List[CatalogItem]:
                     "file_name": "prism_dac.uf2",
                 },
             ),
-            local_paths=("reflex-prism/v1.10.5/prism_dac.uf2",),
+            local_paths=("reflex-prism/v1.10.7/prism_dac.uf2",),
+            pre_flash_bootloader=PRISM_PRE_FLASH_BOOTLOADER,
             post_flash_check=PRISM_POST_FLASH_CHECK,
             expected_uf2_family=RP2040_UF2_FAMILY_ID,
         )
@@ -903,6 +919,22 @@ def wait_for_rpi_rp2(stop_event: threading.Event, poll_seconds: float = 1.0) -> 
         stop_event.wait(poll_seconds)
 
 
+def wait_for_rpi_rp2_timeout(
+    stop_event: threading.Event,
+    *,
+    timeout_s: float,
+    poll_seconds: float = 0.25,
+) -> List[Mount]:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        _raise_if_stopped(stop_event)
+        mounts = find_rpi_rp2_mounts()
+        if mounts:
+            return mounts
+        stop_event.wait(poll_seconds)
+    raise FirmwareError("Timed out waiting for RPI-RP2 after serial bootloader command.")
+
+
 def wait_for_detach(
     mounts: Sequence[Mount],
     stop_event: threading.Event,
@@ -1211,11 +1243,19 @@ def format_controllers(controllers: Iterable[Controller]) -> str:
     return ", ".join(names) if names else "unknown controller"
 
 
-def _parse_post_flash_int(value: object, field: str) -> int:
+def _parse_config_int(value: object, field: str, context: str) -> int:
     parsed = parse_optional_int(value)
     if parsed is None:
-        raise FirmwareError(f"Post-flash check is missing {field}.")
+        raise FirmwareError(f"{context} is missing {field}.")
     return parsed
+
+
+def _parse_post_flash_int(value: object, field: str) -> int:
+    return _parse_config_int(value, field, "Post-flash check")
+
+
+def _parse_pre_flash_int(value: object, field: str) -> int:
+    return _parse_config_int(value, field, "Pre-flash bootloader command")
 
 
 def _require_pyserial():
@@ -1224,10 +1264,18 @@ def _require_pyserial():
         from serial.tools import list_ports  # type: ignore
     except ImportError as exc:
         raise FirmwareError(
-            "Prism post-flash serial checks require pyserial. "
+            "Serial bootloader and post-flash checks require pyserial. "
             "Install it with: python -m pip install pyserial"
         ) from exc
     return serial, list_ports
+
+
+def find_serial_vid_pid(vid: int, pid: int) -> Optional[str]:
+    _serial, list_ports = _require_pyserial()
+    for port in list_ports.comports():
+        if port.vid == vid and port.pid == pid:
+            return str(port.device)
+    return None
 
 
 def wait_for_serial_vid_pid(
@@ -1239,15 +1287,14 @@ def wait_for_serial_vid_pid(
     log: Callable[[str], None],
     poll_seconds: float = 0.5,
 ) -> str:
-    _serial, list_ports = _require_pyserial()
     deadline = time.time() + timeout_s
     last_log = 0.0
 
     while time.time() < deadline:
         _raise_if_stopped(stop_event)
-        for port in list_ports.comports():
-            if port.vid == vid and port.pid == pid:
-                return str(port.device)
+        port_name = find_serial_vid_pid(vid, pid)
+        if port_name:
+            return port_name
 
         now = time.time()
         if now - last_log >= 5.0:
@@ -1256,6 +1303,66 @@ def wait_for_serial_vid_pid(
         stop_event.wait(poll_seconds)
 
     raise FirmwareError(f"Timed out waiting for USB serial VID:PID {vid:04X}:{pid:04X}.")
+
+
+def wait_for_serial_vid_pid_detach(
+    vid: int,
+    pid: int,
+    *,
+    stop_event: threading.Event,
+    log: Callable[[str], None],
+    poll_seconds: float = 0.5,
+) -> None:
+    last_log = 0.0
+    while True:
+        _raise_if_stopped(stop_event)
+        port_name = find_serial_vid_pid(vid, pid)
+        if not port_name:
+            return
+
+        now = time.time()
+        if now - last_log >= 5.0:
+            log(f"Waiting for USB serial VID:PID {vid:04X}:{pid:04X} to disconnect from {port_name}...")
+            last_log = now
+        stop_event.wait(poll_seconds)
+
+
+def wait_for_flash_mounts(
+    pre_flash_bootloader: Optional[dict],
+    stop_event: threading.Event,
+    log: Callable[[str], None],
+    poll_seconds: float = 1.0,
+) -> List[Mount]:
+    if not pre_flash_bootloader:
+        return wait_for_rpi_rp2(stop_event, poll_seconds=poll_seconds)
+
+    vid = _parse_pre_flash_int(pre_flash_bootloader.get("vid"), "vid")
+    pid = _parse_pre_flash_int(pre_flash_bootloader.get("pid"), "pid")
+    label = str(pre_flash_bootloader.get("label") or "serial bootloader command")
+    timeout_s = float(pre_flash_bootloader.get("timeout", 30.0))
+    last_log = 0.0
+
+    while True:
+        _raise_if_stopped(stop_event)
+        mounts = find_rpi_rp2_mounts()
+        if mounts:
+            return mounts
+
+        port_name = find_serial_vid_pid(vid, pid)
+        if port_name:
+            log(f"Found {label} on {port_name}; entering RP2040 bootloader.")
+            run_serial_bootloader_command(pre_flash_bootloader, port_name, stop_event=stop_event, log=log)
+            return wait_for_rpi_rp2_timeout(
+                stop_event,
+                timeout_s=timeout_s,
+                poll_seconds=min(poll_seconds, 0.25),
+            )
+
+        now = time.time()
+        if now - last_log >= 5.0:
+            log(f"Waiting for RPI-RP2 drive or USB serial VID:PID {vid:04X}:{pid:04X}...")
+            last_log = now
+        stop_event.wait(poll_seconds)
 
 
 def serial_read_until_idle(port, *, idle_s: float, timeout_s: float) -> str:
@@ -1281,6 +1388,59 @@ def serial_send_command(port, command: str, *, timeout_s: float) -> str:
     port.flush()
     time.sleep(0.05)
     return serial_read_until_idle(port, idle_s=1.0, timeout_s=timeout_s)
+
+
+def run_serial_bootloader_command(
+    check: dict,
+    port_name: str,
+    *,
+    stop_event: threading.Event,
+    log: Callable[[str], None],
+) -> None:
+    serial, _list_ports = _require_pyserial()
+    check_type = str(check.get("type") or "serial_bootloader").lower()
+    if check_type != "serial_bootloader":
+        raise FirmwareError(f"Unsupported pre-flash bootloader type: {check_type}")
+
+    label = str(check.get("label") or "serial bootloader command")
+    baud = int(check.get("baud", 115200))
+    command = str(check.get("command") or "").strip()
+    open_settle_s = float(check.get("open_settle", 0.5))
+    command_timeout_s = float(check.get("command_timeout", 2.0))
+    if not command:
+        raise FirmwareError("Pre-flash bootloader command is missing command.")
+
+    wrote_command = False
+    try:
+        port = serial.Serial(port_name, baudrate=baud, timeout=0.1, write_timeout=command_timeout_s)
+        try:
+            time.sleep(open_settle_s)
+            _raise_if_stopped(stop_event)
+            try:
+                serial_read_until_idle(port, idle_s=0.1, timeout_s=0.3)
+            except Exception:
+                pass
+            port.write((command + "\r\n").encode("utf-8"))
+            wrote_command = True
+            try:
+                port.flush()
+            except Exception:
+                pass
+        finally:
+            try:
+                port.close()
+            except Exception:
+                if not wrote_command:
+                    raise
+    except InstallerStopped:
+        raise
+    except Exception as exc:
+        if wrote_command:
+            log(f"Sent {label}; serial port disconnected during bootloader entry.")
+            return
+        raise FirmwareError(f"Failed to send {label} on {port_name}: {exc}") from exc
+
+    log(f"Sent {label} on {port_name}.")
 
 
 def run_serial_console_post_flash_check(
@@ -1340,19 +1500,26 @@ def run_install_loop(
     firmware: FirmwareSource,
     verify_controller: bool,
     post_flash_check: Optional[dict],
+    pre_flash_bootloader: Optional[dict],
     stop_event: threading.Event,
     log: Callable[[str], None],
     status: Callable[[str, str], None],
     once: bool = False,
 ) -> None:
     log(f"Firmware selected: {firmware.display_name}")
-    log("Waiting for an RPI-RP2 bootloader drive.")
+    if pre_flash_bootloader:
+        log("Waiting for an RPI-RP2 bootloader drive or a matching USB serial device.")
+    else:
+        log("Waiting for an RPI-RP2 bootloader drive.")
 
     while True:
         _raise_if_stopped(stop_event)
-        status("Waiting for RPI-RP2 drive...", "blue")
+        if pre_flash_bootloader:
+            status("Waiting for RPI-RP2 drive or matching serial device...", "blue")
+        else:
+            status("Waiting for RPI-RP2 drive...", "blue")
         baseline = list_game_controllers() if verify_controller else set()
-        mounts = wait_for_rpi_rp2(stop_event)
+        mounts = wait_for_flash_mounts(pre_flash_bootloader, stop_event, log)
 
         status(f"Copying {firmware.copy_name}...", "orange")
         log(f"Found RPI-RP2 drive(s): {format_mounts(mounts)}")
@@ -1375,17 +1542,28 @@ def run_install_loop(
             run_post_flash_check(post_flash_check, stop_event=stop_event, log=log)
             log(f"Post-flash check passed: {label}")
 
+        next_target = "next device" if pre_flash_bootloader else "next RPI-RP2"
         if verify_controller and post_flash_check:
-            status(f"{CHECK_MARK} Flash complete; controller and post-flash check passed. Waiting for next RPI-RP2...", "green")
+            status(f"{CHECK_MARK} Flash complete; controller and post-flash check passed. Waiting for {next_target}...", "green")
         elif verify_controller:
-            status(f"{CHECK_MARK} Flash complete; controller detected. Waiting for next RPI-RP2...", "green")
+            status(f"{CHECK_MARK} Flash complete; controller detected. Waiting for {next_target}...", "green")
         elif post_flash_check:
-            status(f"{CHECK_MARK} Flash complete; post-flash check passed. Waiting for next RPI-RP2...", "green")
+            status(f"{CHECK_MARK} Flash complete; post-flash check passed. Waiting for {next_target}...", "green")
         else:
-            status(f"{CHECK_MARK} Flash complete. Waiting for next RPI-RP2...", "green")
+            status(f"{CHECK_MARK} Flash complete. Waiting for {next_target}...", "green")
 
         if once:
             return
+
+        if pre_flash_bootloader:
+            try:
+                vid = _parse_pre_flash_int(pre_flash_bootloader.get("vid"), "vid")
+                pid = _parse_pre_flash_int(pre_flash_bootloader.get("pid"), "pid")
+                status("Flash complete. Disconnect device to arm the next unit...", "green")
+                wait_for_serial_vid_pid_detach(vid, pid, stop_event=stop_event, log=log)
+                log("Flashed serial device disconnected.")
+            except FirmwareError as error:
+                log(f"Skipping serial disconnect wait: {error}")
 
         stop_event.wait(1.5)
 
@@ -1433,7 +1611,7 @@ def launch_gui() -> int:
 
             self.choice_var = tk.StringVar(value="")
             self.verify_var = tk.BooleanVar(value=True)
-            self.status_var = tk.StringVar(value="Select firmware, then connect an RPI-RP2 drive.")
+            self.status_var = tk.StringVar(value="Select firmware, then connect a device.")
 
             frame = ttk.Frame(root, padding=16)
             frame.pack(fill="both", expand=True)
@@ -1485,7 +1663,7 @@ def launch_gui() -> int:
             self.stop_button.grid(row=6, column=3, sticky="e", padx=(8, 0), pady=(12, 0))
 
             self.load_firmware_choices()
-            self.log("Select firmware, then connect a board in BOOTSEL/RPI-RP2 mode.")
+            self.log("Select firmware, then connect a board normally or in BOOTSEL/RPI-RP2 mode.")
 
         def load_firmware_choices(self) -> None:
             choices = discover_firmware_choices()
@@ -1522,6 +1700,8 @@ def launch_gui() -> int:
                 self.set_status("Coming soon; no firmware source configured yet.", "orange")
             elif choice.install_method != "rp2040":
                 self.set_status(f"{choice.status.title()}; download/cache only for this 32u4 package.", "orange")
+            elif choice.source and choice.pre_flash_bootloader:
+                self.set_status(f"Ready ({choice.status}); normal serial or BOOTSEL/RPI-RP2 supported.", "gray25")
             elif choice.source:
                 self.set_status(f"Ready ({choice.status}).", "gray25")
             else:
@@ -1685,6 +1865,7 @@ def launch_gui() -> int:
                     firmware=firmware,
                     verify_controller=verify,
                     post_flash_check=choice.post_flash_check if choice else None,
+                    pre_flash_bootloader=choice.pre_flash_bootloader if choice else None,
                     stop_event=self.stop_event,
                     log=self.thread_log,
                     status=self.thread_status,
@@ -1784,6 +1965,7 @@ def catalog_choice_records(root: Optional[Path] = None) -> List[dict]:
                 "label": choice.label,
                 "install_method": choice.install_method,
                 "controller_check": bool(choice.controller_check),
+                "pre_flash_bootloader": bool(choice.pre_flash_bootloader),
                 "post_flash_check": bool(choice.post_flash_check),
                 "status": choice.status,
                 "source": source,
@@ -1795,6 +1977,7 @@ def catalog_choice_records(root: Optional[Path] = None) -> List[dict]:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv or sys.argv[1:])
     post_flash_check: Optional[dict] = None
+    pre_flash_bootloader: Optional[dict] = None
     if args.catalog_json:
         print(json.dumps(catalog_choice_records(), indent=2))
         return 0
@@ -1831,6 +2014,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             verify_controller = False
         else:
             verify_controller = item.controller_check
+        pre_flash_bootloader = item.pre_flash_bootloader
         post_flash_check = item.post_flash_check
     elif not args.firmware:
         return launch_gui()
@@ -1859,6 +2043,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             firmware=firmware,
             verify_controller=verify_controller,
             post_flash_check=post_flash_check,
+            pre_flash_bootloader=pre_flash_bootloader,
             stop_event=stop_event,
             log=_print_log,
             status=_print_status,

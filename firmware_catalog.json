@@ -214,6 +214,17 @@
       "local_paths": [
         "reflex-prism/v1.10.7/prism_dac.uf2"
       ],
+      "pre_flash_bootloader": {
+        "type": "serial_bootloader",
+        "label": "Reflex Prism CDC bootloader command",
+        "vid": "0x16D0",
+        "pid": "0x14F6",
+        "baud": 115200,
+        "command": "bootloader",
+        "timeout": 30,
+        "open_settle": 0.5,
+        "command_timeout": 2
+      },
       "post_flash_check": {
         "type": "serial_console",
         "label": "Reflex Prism CDC sanity check",
