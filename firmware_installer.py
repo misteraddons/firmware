@@ -131,6 +131,7 @@ class FirmwareChoice:
     item_id: Optional[str] = None
     install_method: str = "rp2040"
     controller_check: Optional[bool] = None
+    hardware_check: Optional[dict] = None
     pre_flash_bootloader: Optional[dict] = None
     post_flash_check: Optional[dict] = None
     status: str = "custom"
@@ -145,6 +146,7 @@ class CatalogItem:
     controller_check: bool
     sources: Sequence[dict]
     local_paths: Sequence[str]
+    hardware_check: Optional[dict] = None
     pre_flash_bootloader: Optional[dict] = None
     post_flash_check: Optional[dict] = None
     notes: str = ""
@@ -230,6 +232,38 @@ PRISM_PRE_FLASH_BOOTLOADER = {
     "timeout": 30,
     "open_settle": 0.5,
     "command_timeout": 2,
+}
+PRISM_HARDWARE_CHECK = {
+    "type": "serial_hardware_check",
+    "label": "Reflex Prism hardware compatibility",
+    "vid": "0x16D0",
+    "pid": "0x14F6",
+    "baud": 115200,
+    "command": "dashboard config get",
+    "timeout": 30,
+    "open_settle": 0.5,
+    "command_timeout": 8,
+    "expected_group": "prism-v11",
+    "expected_label": "Prism V1.05/V1.1",
+    "expect": [
+        "Hardware target: V1.05/V1.1 boards",
+    ],
+    "known_mismatches": [
+        {
+            "group": "prism-v12",
+            "label": "Prism V1.2",
+            "markers": [
+                "Hardware target: V1.2 boards",
+            ],
+        },
+        {
+            "group": "prism-pro",
+            "label": "Prism Pro",
+            "markers": [
+                "Hardware target: Pro boards",
+            ],
+        },
+    ],
 }
 PRISM_POST_FLASH_CHECK = {
     "type": "serial_console",
@@ -323,6 +357,7 @@ def load_catalog(root: Optional[Path] = None) -> List[CatalogItem]:
                 controller_check=bool(raw.get("controller_check", False)),
                 sources=tuple(raw.get("sources", [])),
                 local_paths=tuple(raw.get("local_paths", [])),
+                hardware_check=raw.get("hardware_check"),
                 pre_flash_bootloader=raw.get("pre_flash_bootloader"),
                 post_flash_check=raw.get("post_flash_check"),
                 notes=raw.get("notes", ""),
@@ -359,6 +394,7 @@ def catalog_firmware_choices(items: Sequence[CatalogItem], root: Optional[Path] 
                 item_id=item.item_id,
                 install_method=item.install_method,
                 controller_check=item.controller_check,
+                hardware_check=item.hardware_check,
                 pre_flash_bootloader=item.pre_flash_bootloader,
                 post_flash_check=item.post_flash_check,
                 status=status,
@@ -395,6 +431,7 @@ def builtin_catalog_items() -> List[CatalogItem]:
                 },
             ),
             local_paths=("reflex-prism/v1.10.7/prism_dac.uf2",),
+            hardware_check=PRISM_HARDWARE_CHECK,
             pre_flash_bootloader=PRISM_PRE_FLASH_BOOTLOADER,
             post_flash_check=PRISM_POST_FLASH_CHECK,
             expected_uf2_family=RP2040_UF2_FAMILY_ID,
@@ -1278,6 +1315,43 @@ def find_serial_vid_pid(vid: int, pid: int) -> Optional[str]:
     return None
 
 
+def list_connected_serial_vid_pids() -> Set[Tuple[int, int]]:
+    _serial, list_ports = _require_pyserial()
+    devices: Set[Tuple[int, int]] = set()
+    for port in list_ports.comports():
+        if port.vid is None or port.pid is None:
+            continue
+        devices.add((int(port.vid), int(port.pid)))
+    return devices
+
+
+def firmware_choice_key(choice: FirmwareChoice) -> str:
+    return choice.item_id or choice.label
+
+
+def firmware_choice_vid_pid(choice: FirmwareChoice) -> Optional[Tuple[int, int]]:
+    for config in (choice.pre_flash_bootloader, choice.post_flash_check):
+        if not config:
+            continue
+        vid = parse_optional_int(config.get("vid"))
+        pid = parse_optional_int(config.get("pid"))
+        if vid is not None and pid is not None:
+            return vid, pid
+    return None
+
+
+def connected_firmware_choice_keys(
+    choices: Sequence[FirmwareChoice],
+    connected_vid_pids: Set[Tuple[int, int]],
+) -> Set[str]:
+    connected: Set[str] = set()
+    for choice in choices:
+        vid_pid = firmware_choice_vid_pid(choice)
+        if vid_pid and vid_pid in connected_vid_pids:
+            connected.add(firmware_choice_key(choice))
+    return connected
+
+
 def wait_for_serial_vid_pid(
     vid: int,
     pid: int,
@@ -1329,6 +1403,7 @@ def wait_for_serial_vid_pid_detach(
 
 def wait_for_flash_mounts(
     pre_flash_bootloader: Optional[dict],
+    hardware_check: Optional[dict],
     stop_event: threading.Event,
     log: Callable[[str], None],
     poll_seconds: float = 1.0,
@@ -1346,11 +1421,20 @@ def wait_for_flash_mounts(
         _raise_if_stopped(stop_event)
         mounts = find_rpi_rp2_mounts()
         if mounts:
+            if hardware_check:
+                raise FirmwareError(
+                    "Hardware compatibility cannot be verified from an RPI-RP2 bootloader drive. "
+                    "Connect the device normally so the installer can verify the hardware revision "
+                    "before entering bootloader."
+                )
             return mounts
 
         port_name = find_serial_vid_pid(vid, pid)
         if port_name:
-            log(f"Found {label} on {port_name}; entering RP2040 bootloader.")
+            log(f"Found {label} on {port_name}.")
+            if hardware_check:
+                run_serial_hardware_check(hardware_check, port_name, stop_event=stop_event, log=log)
+            log(f"Entering RP2040 bootloader on {port_name}.")
             run_serial_bootloader_command(pre_flash_bootloader, port_name, stop_event=stop_event, log=log)
             return wait_for_rpi_rp2_timeout(
                 stop_event,
@@ -1388,6 +1472,60 @@ def serial_send_command(port, command: str, *, timeout_s: float) -> str:
     port.flush()
     time.sleep(0.05)
     return serial_read_until_idle(port, idle_s=1.0, timeout_s=timeout_s)
+
+
+def validate_serial_hardware_response(check: dict, response: str) -> None:
+    expected_label = str(check.get("expected_label") or check.get("expected_group") or "selected firmware")
+    expected_markers = [str(marker) for marker in check.get("expect", []) if str(marker)]
+    missing = [marker for marker in expected_markers if marker not in response]
+    if not missing:
+        return
+
+    for mismatch in check.get("known_mismatches", []) or []:
+        markers = [str(marker) for marker in mismatch.get("markers", []) if str(marker)]
+        if markers and all(marker in response for marker in markers):
+            connected_label = str(mismatch.get("label") or mismatch.get("group") or "different hardware")
+            raise FirmwareError(
+                f"Hardware mismatch: selected firmware targets {expected_label}, "
+                f"but connected {connected_label}."
+            )
+
+    raise FirmwareError(
+        f"Hardware compatibility check did not confirm {expected_label}; "
+        f"missing expected text: {', '.join(missing)}"
+    )
+
+
+def run_serial_hardware_check(
+    check: dict,
+    port_name: str,
+    *,
+    stop_event: threading.Event,
+    log: Callable[[str], None],
+) -> None:
+    serial, _list_ports = _require_pyserial()
+    check_type = str(check.get("type") or "serial_hardware_check").lower()
+    if check_type != "serial_hardware_check":
+        raise FirmwareError(f"Unsupported hardware check type: {check_type}")
+
+    label = str(check.get("label") or "hardware compatibility check")
+    baud = int(check.get("baud", 115200))
+    command = str(check.get("command") or "").strip()
+    open_settle_s = float(check.get("open_settle", 0.5))
+    command_timeout_s = float(check.get("command_timeout", 8.0))
+    if not command:
+        raise FirmwareError("Hardware compatibility check is missing command.")
+
+    log(f"Running {label} on {port_name}.")
+    with serial.Serial(port_name, baudrate=baud, timeout=0.1, write_timeout=2) as port:
+        time.sleep(open_settle_s)
+        _raise_if_stopped(stop_event)
+        serial_read_until_idle(port, idle_s=0.2, timeout_s=1.0)
+        response = serial_send_command(port, command, timeout_s=command_timeout_s)
+
+    validate_serial_hardware_response(check, response)
+    expected_label = str(check.get("expected_label") or check.get("expected_group") or "selected firmware")
+    log(f"Hardware compatibility passed: {expected_label} on {port_name}.")
 
 
 def run_serial_bootloader_command(
@@ -1501,6 +1639,7 @@ def run_install_loop(
     verify_controller: bool,
     post_flash_check: Optional[dict],
     pre_flash_bootloader: Optional[dict],
+    hardware_check: Optional[dict],
     stop_event: threading.Event,
     log: Callable[[str], None],
     status: Callable[[str, str], None],
@@ -1519,7 +1658,7 @@ def run_install_loop(
         else:
             status("Waiting for RPI-RP2 drive...", "blue")
         baseline = list_game_controllers() if verify_controller else set()
-        mounts = wait_for_flash_mounts(pre_flash_bootloader, stop_event, log)
+        mounts = wait_for_flash_mounts(pre_flash_bootloader, hardware_check, stop_event, log)
 
         status(f"Copying {firmware.copy_name}...", "orange")
         log(f"Found RPI-RP2 drive(s): {format_mounts(mounts)}")
@@ -1602,6 +1741,10 @@ def launch_gui() -> int:
             self.firmware: Optional[FirmwareSource] = None
             self.selected_choice: Optional[FirmwareChoice] = None
             self.choice_by_label: Dict[str, FirmwareChoice] = {}
+            self.catalog_choices: List[FirmwareChoice] = []
+            self.connected_choice_keys: Set[str] = set()
+            self.device_detection_after_id: Optional[str] = None
+            self.device_detection_error_logged = False
             self.worker: Optional[threading.Thread] = None
             self.stop_event = threading.Event()
 
@@ -1663,22 +1806,93 @@ def launch_gui() -> int:
             self.stop_button.grid(row=6, column=3, sticky="e", padx=(8, 0), pady=(12, 0))
 
             self.load_firmware_choices()
+            self.schedule_device_detection_refresh()
             self.log("Select firmware, then connect a board normally or in BOOTSEL/RPI-RP2 mode.")
 
         def load_firmware_choices(self) -> None:
-            choices = discover_firmware_choices()
-            self.choice_by_label = {choice.label: choice for choice in choices}
-            labels = list(self.choice_by_label)
-            self.firmware_combo.configure(values=labels)
+            self.catalog_choices = discover_firmware_choices()
+            self.refresh_connected_choice_keys(log_errors=False)
+            labels = self.populate_firmware_combo()
 
             if labels:
-                self.choice_var.set(labels[0])
-                self.select_dropdown_firmware(log_selected=False)
                 self.log(f"Found {len(labels)} catalog firmware option(s).")
                 return
 
             self.firmware_combo.configure(state="disabled")
             self.set_status("No repo UF2 firmware found. Use Browse for a custom UF2.", "orange")
+
+        def refresh_connected_choice_keys(self, log_errors: bool = True) -> bool:
+            if not any(firmware_choice_vid_pid(choice) for choice in self.catalog_choices):
+                connected_keys = set()
+            else:
+                try:
+                    connected_vid_pids = list_connected_serial_vid_pids()
+                    connected_keys = connected_firmware_choice_keys(self.catalog_choices, connected_vid_pids)
+                    self.device_detection_error_logged = False
+                except FirmwareError as error:
+                    connected_keys = set()
+                    if log_errors and not self.device_detection_error_logged:
+                        self.log(f"USB serial device detection unavailable: {error}")
+                        self.device_detection_error_logged = True
+
+            if connected_keys == self.connected_choice_keys:
+                return False
+            self.connected_choice_keys = connected_keys
+            return True
+
+        def schedule_device_detection_refresh(self) -> None:
+            self.device_detection_after_id = self.root.after(2000, self.refresh_connected_devices)
+
+        def refresh_connected_devices(self) -> None:
+            self.device_detection_after_id = None
+            try:
+                if not (self.worker and self.worker.is_alive()) and self.catalog_choices:
+                    selected_key = firmware_choice_key(self.selected_choice) if self.selected_choice else None
+                    if self.refresh_connected_choice_keys():
+                        self.populate_firmware_combo(selected_key=selected_key)
+            finally:
+                self.schedule_device_detection_refresh()
+
+        def choice_display_label(self, choice: FirmwareChoice) -> str:
+            if firmware_choice_key(choice) in self.connected_choice_keys:
+                return f"{choice.label} [connected]"
+            return choice.label
+
+        def ordered_firmware_choices(self) -> List[FirmwareChoice]:
+            indexed = list(enumerate(self.catalog_choices))
+            indexed.sort(
+                key=lambda item: (
+                    0 if firmware_choice_key(item[1]) in self.connected_choice_keys else 1,
+                    item[0],
+                )
+            )
+            return [choice for _index, choice in indexed]
+
+        def populate_firmware_combo(self, selected_key: Optional[str] = None) -> List[str]:
+            ordered_choices = self.ordered_firmware_choices()
+            self.choice_by_label = {self.choice_display_label(choice): choice for choice in ordered_choices}
+            labels = list(self.choice_by_label)
+            self.firmware_combo.configure(values=labels)
+
+            if not labels:
+                return labels
+
+            if selected_key is None and self.selected_choice:
+                selected_key = firmware_choice_key(self.selected_choice)
+
+            selected = self.choice_for_key(selected_key) if selected_key else None
+            if selected is None:
+                selected = ordered_choices[0]
+            self.apply_choice(selected, log_selected=False)
+            return labels
+
+        def choice_for_key(self, key: Optional[str]) -> Optional[FirmwareChoice]:
+            if not key:
+                return None
+            for choice in self.catalog_choices:
+                if firmware_choice_key(choice) == key or choice.label == key:
+                    return choice
+            return None
 
         def select_dropdown_firmware(self, _event: object = None, log_selected: bool = True) -> None:
             label = self.choice_var.get()
@@ -1690,7 +1904,7 @@ def launch_gui() -> int:
         def apply_choice(self, choice: FirmwareChoice, log_selected: bool = True) -> None:
             self.selected_choice = choice
             self.firmware = choice.source
-            self.choice_var.set(choice.label)
+            self.choice_var.set(self.choice_display_label(choice))
             if choice.controller_check is None:
                 self.verify_var.set(is_controller_firmware(choice.source) if choice.source else False)
             else:
@@ -1700,6 +1914,10 @@ def launch_gui() -> int:
                 self.set_status("Coming soon; no firmware source configured yet.", "orange")
             elif choice.install_method != "rp2040":
                 self.set_status(f"{choice.status.title()}; download/cache only for this 32u4 package.", "orange")
+            elif choice.source and firmware_choice_key(choice) in self.connected_choice_keys:
+                self.set_status(f"Ready ({choice.status}); connected device detected.", "green")
+            elif choice.source and choice.hardware_check:
+                self.set_status(f"Ready ({choice.status}); connect normally for hardware-verified flashing.", "gray25")
             elif choice.source and choice.pre_flash_bootloader:
                 self.set_status(f"Ready ({choice.status}); normal serial or BOOTSEL/RPI-RP2 supported.", "gray25")
             elif choice.source:
@@ -1742,10 +1960,13 @@ def launch_gui() -> int:
                 return
 
             label = _firmware_choice_label(firmware, default_firmware_root())
-            if label not in self.choice_by_label:
-                self.choice_by_label[label] = FirmwareChoice(label=label, source=firmware)
-                self.firmware_combo.configure(values=list(self.choice_by_label), state="readonly")
-            self.apply_choice(self.choice_by_label[label])
+            choice = self.choice_for_key(label)
+            if choice is None:
+                choice = FirmwareChoice(label=label, source=firmware)
+                self.catalog_choices.append(choice)
+                self.firmware_combo.configure(state="readonly")
+            self.populate_firmware_combo(selected_key=firmware_choice_key(choice))
+            self.apply_choice(choice)
 
         def download_selected(self) -> None:
             choice = self.selected_choice
@@ -1823,7 +2044,7 @@ def launch_gui() -> int:
                 )
                 self.thread_log(f"Cached firmware: {firmware.display_name}")
                 self.thread_status("Cached. Select Start to flash RP2040 firmware.", "green")
-                self.root.after(0, lambda: self.refresh_choice_after_download(choice.label))
+                self.root.after(0, lambda: self.refresh_choice_after_download(firmware_choice_key(choice)))
             except Exception as error:
                 self.thread_log(f"Error: {error}")
                 self.thread_status(f"Error: {error}", "red")
@@ -1831,12 +2052,9 @@ def launch_gui() -> int:
                 self.root.after(0, self.worker_done)
 
         def refresh_choice_after_download(self, label: str) -> None:
-            choices = discover_firmware_choices()
-            self.choice_by_label = {choice.label: choice for choice in choices}
-            self.firmware_combo.configure(values=list(self.choice_by_label))
-            choice = self.choice_by_label.get(label)
-            if choice:
-                self.apply_choice(choice, log_selected=False)
+            self.catalog_choices = discover_firmware_choices()
+            self.refresh_connected_choice_keys(log_errors=False)
+            self.populate_firmware_combo(selected_key=label)
 
         def worker_main(
             self,
@@ -1866,6 +2084,7 @@ def launch_gui() -> int:
                     verify_controller=verify,
                     post_flash_check=choice.post_flash_check if choice else None,
                     pre_flash_bootloader=choice.pre_flash_bootloader if choice else None,
+                    hardware_check=choice.hardware_check if choice else None,
                     stop_event=self.stop_event,
                     log=self.thread_log,
                     status=self.thread_status,
@@ -1965,6 +2184,7 @@ def catalog_choice_records(root: Optional[Path] = None) -> List[dict]:
                 "label": choice.label,
                 "install_method": choice.install_method,
                 "controller_check": bool(choice.controller_check),
+                "hardware_check": bool(choice.hardware_check),
                 "pre_flash_bootloader": bool(choice.pre_flash_bootloader),
                 "post_flash_check": bool(choice.post_flash_check),
                 "status": choice.status,
@@ -1978,6 +2198,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv or sys.argv[1:])
     post_flash_check: Optional[dict] = None
     pre_flash_bootloader: Optional[dict] = None
+    hardware_check: Optional[dict] = None
     if args.catalog_json:
         print(json.dumps(catalog_choice_records(), indent=2))
         return 0
@@ -2014,6 +2235,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             verify_controller = False
         else:
             verify_controller = item.controller_check
+        hardware_check = item.hardware_check
         pre_flash_bootloader = item.pre_flash_bootloader
         post_flash_check = item.post_flash_check
     elif not args.firmware:
@@ -2044,6 +2266,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             verify_controller=verify_controller,
             post_flash_check=post_flash_check,
             pre_flash_bootloader=pre_flash_bootloader,
+            hardware_check=hardware_check,
             stop_event=stop_event,
             log=_print_log,
             status=_print_status,

@@ -63,7 +63,7 @@ python3 firmware_cli.py --firmware path/to/firmware.uf2
 
 Flashing is continuous by default: after one device completes, the CLI waits for the next `RPI-RP2` bootloader drive or configured serial bootloader device. Add `--once` only when you want to flash one device and exit.
 
-When `reflex-prism` is selected, the CLI downloads the latest Prism `prism_dac.uf2` from this GitHub repo when needed, watches for Prism USB CDC VID:PID `16D0:14F6`, sends `bootloader`, flashes it, runs the Prism USB CDC sanity check, then waits for disconnect before arming for the next Prism. BOOTSEL/manual `RPI-RP2` mode still works.
+When `reflex-prism` is selected, the CLI downloads the latest Prism `prism_dac.uf2` from this GitHub repo when needed, watches for Prism USB CDC VID:PID `16D0:14F6`, verifies the reported hardware target matches the selected firmware group, sends `bootloader`, flashes it, runs the Prism USB CDC sanity check, then waits for disconnect before arming for the next Prism. Catalog Prism firmware cannot start from an already-mounted BOOTSEL/manual `RPI-RP2` drive because the hardware revision cannot be verified there; manually browsed custom UF2 files still work for recovery.
 
 The original installer script also accepts the same headless arguments:
 
@@ -81,10 +81,10 @@ Build a Windows executable:
 .\dist\FirmwareInstaller\FirmwareInstaller.exe
 ```
 
-The executable is a PyInstaller onedir build. It bundles the catalog and Windows GUI script, then uses `FirmwareInstaller.exe` itself for catalog, download, and flash subprocesses. No system Python install is required for the built app.
+The executable is a PyInstaller onedir build. It bundles the catalog, checksums, mirrored firmware folders, and Windows GUI script, then uses `FirmwareInstaller.exe` itself for catalog, download, and flash subprocesses. No system Python install is required for the built app.
 Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. The latest mirrored release is `v1.10.7`.
 
-Reflex Prism update checks use `firmware_catalog.json` source type `github_repo_latest_semver_file`. The installer lists `misteraddons/firmware/reflex-prism`, sorts version directories semantically, and downloads `prism_dac.uf2` from the highest version directory. `tools/sync_prism_firmware.py` mirrors the latest `misteraddons/Reflex-Prism` release into this repo and updates the catalog, README, and checksums together. Downloads and local UF2 files are validated as structurally valid UF2 images and, for RP2040 entries, must carry UF2 family ID `0xE48BFF56`. Before flashing Prism, the installer can find USB CDC VID:PID `16D0:14F6` and send `bootloader`; after flashing, it opens the same serial console and sanity-checks `status` plus `dashboard config get`. Source runs need `pyserial`; the Windows bundled installer includes it.
+Reflex Prism update checks use `firmware_catalog.json` source type `github_repo_latest_semver_file`. The installer lists `misteraddons/firmware/reflex-prism`, sorts version directories semantically, and downloads `prism_dac.uf2` from the highest version directory. `tools/sync_prism_firmware.py` mirrors the latest `misteraddons/Reflex-Prism` release into this repo and updates the catalog, README, and checksums together. Downloads and local UF2 files are validated as structurally valid UF2 images and, for RP2040 entries, must carry UF2 family ID `0xE48BFF56`. Before flashing Prism catalog firmware, the installer opens the normal USB CDC VID:PID `16D0:14F6`, runs `dashboard config get`, and blocks the update unless `Hardware target` matches the selected firmware hardware group; after flashing, it opens the same serial console and sanity-checks `status` plus `dashboard config get`. Source runs need `pyserial`; the Windows bundled installer includes it.
 
 Reflex Adapt: copy `reflex_updater.sh` to the `Scripts` folder on the MiSTer SD card, or use `reflex-v2.01.zip` for the desktop updater package.
 

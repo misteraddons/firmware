@@ -24,6 +24,7 @@ USER_AGENT = "misteraddons-prism-firmware-sync/1.0"
 @dataclass(frozen=True)
 class ReleaseAsset:
     tag: str
+    release_title: str
     name: str
     api_url: str
     digest: str
@@ -32,6 +33,69 @@ class ReleaseAsset:
 
 def mirror_local_path(tag: str) -> str:
     return f"reflex-prism/{tag}/{ASSET_NAME}"
+
+
+def prism_hardware_check(
+    *,
+    expected_group: str,
+    expected_label: str,
+    expected_marker: str,
+) -> dict:
+    mismatches = [
+        {
+            "group": "prism-v11",
+            "label": "Prism V1.05/V1.1",
+            "markers": ["Hardware target: V1.05/V1.1 boards"],
+        },
+        {
+            "group": "prism-v12",
+            "label": "Prism V1.2",
+            "markers": ["Hardware target: V1.2 boards"],
+        },
+        {
+            "group": "prism-pro",
+            "label": "Prism Pro",
+            "markers": ["Hardware target: Pro boards"],
+        },
+    ]
+    return {
+        "type": "serial_hardware_check",
+        "label": "Reflex Prism hardware compatibility",
+        "vid": "0x16D0",
+        "pid": "0x14F6",
+        "baud": 115200,
+        "command": "dashboard config get",
+        "timeout": 30,
+        "open_settle": 0.5,
+        "command_timeout": 8,
+        "expected_group": expected_group,
+        "expected_label": expected_label,
+        "expect": [expected_marker],
+        "known_mismatches": [
+            mismatch for mismatch in mismatches if mismatch["group"] != expected_group
+        ],
+    }
+
+
+def prism_hardware_check_for_release(tag: str, release_title: str = "") -> dict:
+    text = f"{release_title} {tag}".lower()
+    if re.search(r"\bv1\.2(?:0)?\b", text) or re.match(r"^v?1\.20(?:\.|$)", tag.lower()):
+        return prism_hardware_check(
+            expected_group="prism-v12",
+            expected_label="Prism V1.2",
+            expected_marker="Hardware target: V1.2 boards",
+        )
+    if "pro" in text:
+        return prism_hardware_check(
+            expected_group="prism-pro",
+            expected_label="Prism Pro",
+            expected_marker="Hardware target: Pro boards",
+        )
+    return prism_hardware_check(
+        expected_group="prism-v11",
+        expected_label="Prism V1.05/V1.1",
+        expected_marker="Hardware target: V1.05/V1.1 boards",
+    )
 
 
 def auth_headers(accept: str = "application/vnd.github+json") -> dict[str, str]:
@@ -76,6 +140,7 @@ def resolve_release_asset(repo: str, tag: Optional[str]) -> ReleaseAsset:
     asset = matches[0]
     return ReleaseAsset(
         tag=release_tag,
+        release_title=str(release.get("name") or ""),
         name=asset["name"],
         api_url=asset["url"],
         digest=asset.get("digest") or "",
@@ -114,11 +179,12 @@ def validate_prism_uf2(data: bytes) -> None:
     validate_uf2_stream(BytesIO(data), ASSET_NAME, RP2040_UF2_FAMILY_ID)
 
 
-def update_catalog_text(text: str, tag: str) -> str:
+def update_catalog_text(text: str, tag: str, release_title: str = "") -> str:
     catalog = json.loads(text)
     for item in catalog.get("items", []):
         if item.get("id") == "reflex-prism":
             item["local_paths"] = [mirror_local_path(tag)]
+            item["hardware_check"] = prism_hardware_check_for_release(tag, release_title)
             return json.dumps(catalog, indent=2) + "\n"
     raise RuntimeError("reflex-prism entry not found in firmware_catalog.json")
 
@@ -152,7 +218,7 @@ def update_readme_text(text: str, tag: str) -> str:
     return text
 
 
-def update_repository(root: Path, tag: str, data: bytes) -> Path:
+def update_repository(root: Path, tag: str, data: bytes, release_title: str = "") -> Path:
     validate_prism_uf2(data)
     sha256 = hashlib.sha256(data).hexdigest()
     rel_path = mirror_local_path(tag)
@@ -161,7 +227,10 @@ def update_repository(root: Path, tag: str, data: bytes) -> Path:
     target.write_bytes(data)
 
     catalog_path = root / "firmware_catalog.json"
-    catalog_path.write_text(update_catalog_text(catalog_path.read_text(encoding="utf-8"), tag), encoding="utf-8")
+    catalog_path.write_text(
+        update_catalog_text(catalog_path.read_text(encoding="utf-8"), tag, release_title),
+        encoding="utf-8",
+    )
 
     checksums_path = root / "checksums.sha256"
     checksums_path.write_text(
@@ -197,6 +266,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     else:
         asset, data = fetch_release_asset(args.repo, args.tag, args.attempts, args.retry_delay)
         tag = asset.tag
+        release_title = asset.release_title
         digest = expected_sha256(asset)
         actual = hashlib.sha256(data).hexdigest()
         if digest and digest != actual:
@@ -204,7 +274,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         if asset.size is not None and asset.size != len(data):
             raise RuntimeError(f"{asset.name} size {len(data)}; GitHub release size is {asset.size}")
 
-    target = update_repository(root, tag, data)
+    target = update_repository(root, tag, data, release_title if not args.asset_path else "")
     print(f"Mirrored Reflex Prism {tag}: {target.relative_to(root).as_posix()}")
     return 0
 

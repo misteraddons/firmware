@@ -214,6 +214,38 @@
       "local_paths": [
         "reflex-prism/v1.10.7/prism_dac.uf2"
       ],
+      "hardware_check": {
+        "type": "serial_hardware_check",
+        "label": "Reflex Prism hardware compatibility",
+        "vid": "0x16D0",
+        "pid": "0x14F6",
+        "baud": 115200,
+        "command": "dashboard config get",
+        "timeout": 30,
+        "open_settle": 0.5,
+        "command_timeout": 8,
+        "expected_group": "prism-v11",
+        "expected_label": "Prism V1.05/V1.1",
+        "expect": [
+          "Hardware target: V1.05/V1.1 boards"
+        ],
+        "known_mismatches": [
+          {
+            "group": "prism-v12",
+            "label": "Prism V1.2",
+            "markers": [
+              "Hardware target: V1.2 boards"
+            ]
+          },
+          {
+            "group": "prism-pro",
+            "label": "Prism Pro",
+            "markers": [
+              "Hardware target: Pro boards"
+            ]
+          }
+        ]
+      },
       "pre_flash_bootloader": {
         "type": "serial_bootloader",
         "label": "Reflex Prism CDC bootloader command",
