@@ -6,7 +6,7 @@ Firmware files and a small cross-platform installer/cache for MiSTer Addons prod
 
 | Project | Local file | Source |
 | --- | --- | --- |
-| Reflex Prism | `reflex-prism/v1.10.7/prism_dac.uf2` | [`misteraddons/Reflex-Prism` v1.10.7](https://github.com/misteraddons/Reflex-Prism/releases/tag/v1.10.7) |
+| Reflex Prism | `reflex-prism/v1.10.8/prism_dac.uf2` | [`misteraddons/Reflex-Prism` v1.10.8](https://github.com/misteraddons/Reflex-Prism/releases/tag/v1.10.8) |
 | Reflex Adapt | [`reflex-adapt/v2.01/`](reflex-adapt/v2.01/) | [`misteraddons/Reflex-Adapt-Legacy` v2.01](https://github.com/misteraddons/Reflex-Adapt-Legacy/releases/tag/v2.01) |
 | Reflex CTRL Genesis 6 | `reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlGenesis6.uf2` | [`OpenStickCommunity/GP2040-CE` v0.7.12](https://github.com/OpenStickCommunity/GP2040-CE/releases/download/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlGenesis6.uf2) |
 | Reflex CTRL NES | `reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlNES.uf2` | [`OpenStickCommunity/GP2040-CE` v0.7.12](https://github.com/OpenStickCommunity/GP2040-CE/releases/download/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlNES.uf2) |
@@ -82,7 +82,7 @@ Build a Windows executable:
 ```
 
 The executable is a PyInstaller onedir build. It bundles the catalog, checksums, mirrored firmware folders, and Windows GUI script, then uses `FirmwareInstaller.exe` itself for catalog, download, and flash subprocesses. No system Python install is required for the built app.
-Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. The latest mirrored release is `v1.10.7`.
+Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. The latest mirrored release is `v1.10.8`.
 
 Reflex Prism update checks use `firmware_catalog.json` source type `github_repo_latest_semver_file`. The installer lists `misteraddons/firmware/reflex-prism`, sorts version directories semantically, and downloads `prism_dac.uf2` from the highest version directory. `tools/sync_prism_firmware.py` mirrors the latest `misteraddons/Reflex-Prism` release into this repo and updates the catalog, README, and checksums together. Downloads and local UF2 files are validated as structurally valid UF2 images and, for RP2040 entries, must carry UF2 family ID `0xE48BFF56`. Before flashing Prism catalog firmware, the installer opens the normal USB CDC VID:PID `16D0:14F6`, runs `dashboard config get`, and blocks the update unless `Hardware target` matches the selected firmware hardware group; after flashing, it opens the same serial console and sanity-checks `status` plus `dashboard config get`. Source runs need `pyserial`; the Windows bundled installer includes it.
 
