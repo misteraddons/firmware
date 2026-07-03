@@ -243,12 +243,16 @@ PRISM_HARDWARE_CHECK = {
     "timeout": 30,
     "open_settle": 0.5,
     "command_timeout": 8,
-    "expected_group": "prism-v11",
-    "expected_label": "Prism V1.05/V1.1",
-    "expect": [
-        "Hardware target: V1.05/V1.1 boards",
-    ],
-    "known_mismatches": [
+    "expected_group": "prism-v1",
+    "expected_label": "Reflex Prism DAC V1",
+    "accepted_targets": [
+        {
+            "group": "prism-v11",
+            "label": "Prism V1.05/V1.1",
+            "markers": [
+                "Hardware target: V1.05/V1.1 boards",
+            ],
+        },
         {
             "group": "prism-v12",
             "label": "Prism V1.2",
@@ -256,6 +260,15 @@ PRISM_HARDWARE_CHECK = {
                 "Hardware target: V1.2 boards",
             ],
         },
+        {
+            "group": "prism-v13",
+            "label": "Prism V1.3 Smart HD15",
+            "markers": [
+                "Hardware target: V1.3 Smart HD15 boards",
+            ],
+        },
+    ],
+    "known_mismatches": [
         {
             "group": "prism-pro",
             "label": "Prism Pro",
@@ -430,7 +443,7 @@ def builtin_catalog_items() -> List[CatalogItem]:
                     "file_name": "prism_dac.uf2",
                 },
             ),
-            local_paths=("reflex-prism/v1.10.7/prism_dac.uf2",),
+            local_paths=("reflex-prism/prism-v1-r10/prism_dac.uf2",),
             hardware_check=PRISM_HARDWARE_CHECK,
             pre_flash_bootloader=PRISM_PRE_FLASH_BOOTLOADER,
             post_flash_check=PRISM_POST_FLASH_CHECK,
@@ -638,8 +651,11 @@ def ensure_list(value: object) -> List[dict]:
 
 
 def semver_key(value: str) -> Tuple[int, ...]:
+    match = re.fullmatch(r"prism-v1-r(\d+)", value.lower())
+    if match:
+        return (1, int(match.group(1)))
     numbers = [int(part) for part in re.findall(r"\d+", value)]
-    return tuple(numbers or [0])
+    return (0, *(numbers or [0]))
 
 
 def safe_file_name(value: str) -> str:
@@ -1476,9 +1492,15 @@ def serial_send_command(port, command: str, *, timeout_s: float) -> str:
 
 def validate_serial_hardware_response(check: dict, response: str) -> None:
     expected_label = str(check.get("expected_label") or check.get("expected_group") or "selected firmware")
+    accepted_targets = check.get("accepted_targets", []) or []
+    for target in accepted_targets:
+        markers = [str(marker) for marker in target.get("markers", []) if str(marker)]
+        if markers and all(marker in response for marker in markers):
+            return
+
     expected_markers = [str(marker) for marker in check.get("expect", []) if str(marker)]
     missing = [marker for marker in expected_markers if marker not in response]
-    if not missing:
+    if not accepted_targets and not missing:
         return
 
     for mismatch in check.get("known_mismatches", []) or []:
@@ -1492,7 +1514,7 @@ def validate_serial_hardware_response(check: dict, response: str) -> None:
 
     raise FirmwareError(
         f"Hardware compatibility check did not confirm {expected_label}; "
-        f"missing expected text: {', '.join(missing)}"
+        f"missing expected text: {', '.join(missing or ['one supported hardware target'])}"
     )
 
 

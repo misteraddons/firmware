@@ -35,13 +35,8 @@ def mirror_local_path(tag: str) -> str:
     return f"reflex-prism/{tag}/{ASSET_NAME}"
 
 
-def prism_hardware_check(
-    *,
-    expected_group: str,
-    expected_label: str,
-    expected_marker: str,
-) -> dict:
-    mismatches = [
+def prism_v1_hardware_check() -> dict:
+    accepted_targets = [
         {
             "group": "prism-v11",
             "label": "Prism V1.05/V1.1",
@@ -52,6 +47,13 @@ def prism_hardware_check(
             "label": "Prism V1.2",
             "markers": ["Hardware target: V1.2 boards"],
         },
+        {
+            "group": "prism-v13",
+            "label": "Prism V1.3 Smart HD15",
+            "markers": ["Hardware target: V1.3 Smart HD15 boards"],
+        },
+    ]
+    mismatches = [
         {
             "group": "prism-pro",
             "label": "Prism Pro",
@@ -68,34 +70,15 @@ def prism_hardware_check(
         "timeout": 30,
         "open_settle": 0.5,
         "command_timeout": 8,
-        "expected_group": expected_group,
-        "expected_label": expected_label,
-        "expect": [expected_marker],
-        "known_mismatches": [
-            mismatch for mismatch in mismatches if mismatch["group"] != expected_group
-        ],
+        "expected_group": "prism-v1",
+        "expected_label": "Reflex Prism DAC V1",
+        "accepted_targets": accepted_targets,
+        "known_mismatches": mismatches,
     }
 
 
 def prism_hardware_check_for_release(tag: str, release_title: str = "") -> dict:
-    text = f"{release_title} {tag}".lower()
-    if re.search(r"\bv1\.2(?:0)?\b", text) or re.match(r"^v?1\.20(?:\.|$)", tag.lower()):
-        return prism_hardware_check(
-            expected_group="prism-v12",
-            expected_label="Prism V1.2",
-            expected_marker="Hardware target: V1.2 boards",
-        )
-    if "pro" in text:
-        return prism_hardware_check(
-            expected_group="prism-pro",
-            expected_label="Prism Pro",
-            expected_marker="Hardware target: Pro boards",
-        )
-    return prism_hardware_check(
-        expected_group="prism-v11",
-        expected_label="Prism V1.05/V1.1",
-        expected_marker="Hardware target: V1.05/V1.1 boards",
-    )
+    return prism_v1_hardware_check()
 
 
 def auth_headers(accept: str = "application/vnd.github+json") -> dict[str, str]:

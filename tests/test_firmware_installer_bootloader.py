@@ -15,17 +15,37 @@ class FirmwareInstallerBootloaderTests(unittest.TestCase):
             "pid": "0x14F6",
             "baud": 115200,
             "command": "dashboard config get",
-            "expected_group": "prism-v11",
-            "expected_label": "Prism V1.05/V1.1",
-            "expect": [
-                "Hardware target: V1.05/V1.1 boards",
-            ],
-            "known_mismatches": [
+            "expected_group": "prism-v1",
+            "expected_label": "Reflex Prism DAC V1",
+            "accepted_targets": [
+                {
+                    "group": "prism-v11",
+                    "label": "Prism V1.05/V1.1",
+                    "markers": [
+                        "Hardware target: V1.05/V1.1 boards",
+                    ],
+                },
                 {
                     "group": "prism-v12",
                     "label": "Prism V1.2",
                     "markers": [
                         "Hardware target: V1.2 boards",
+                    ],
+                },
+                {
+                    "group": "prism-v13",
+                    "label": "Prism V1.3 Smart HD15",
+                    "markers": [
+                        "Hardware target: V1.3 Smart HD15 boards",
+                    ],
+                },
+            ],
+            "known_mismatches": [
+                {
+                    "group": "prism-pro",
+                    "label": "Prism Pro",
+                    "markers": [
+                        "Hardware target: Pro boards",
                     ],
                 },
             ],
@@ -62,17 +82,23 @@ class FirmwareInstallerBootloaderTests(unittest.TestCase):
 
         self.assertEqual(set(), connected)
 
-    def test_serial_hardware_check_accepts_matching_target(self):
-        installer.validate_serial_hardware_response(
-            self.hardware_check(),
-            "[DASHBOARD] CONFIG BEGIN\nHardware target: V1.05/V1.1 boards\n[DASHBOARD] CONFIG END\n",
-        )
+    def test_serial_hardware_check_accepts_prism_v1_targets(self):
+        for marker in (
+            "Hardware target: V1.05/V1.1 boards",
+            "Hardware target: V1.2 boards",
+            "Hardware target: V1.3 Smart HD15 boards",
+        ):
+            with self.subTest(marker=marker):
+                installer.validate_serial_hardware_response(
+                    self.hardware_check(),
+                    f"[DASHBOARD] CONFIG BEGIN\n{marker}\n[DASHBOARD] CONFIG END\n",
+                )
 
     def test_serial_hardware_check_rejects_mismatched_target(self):
-        with self.assertRaisesRegex(installer.FirmwareError, "connected Prism V1.2"):
+        with self.assertRaisesRegex(installer.FirmwareError, "connected Prism Pro"):
             installer.validate_serial_hardware_response(
                 self.hardware_check(),
-                "[DASHBOARD] CONFIG BEGIN\nHardware target: V1.2 boards\n[DASHBOARD] CONFIG END\n",
+                "[DASHBOARD] CONFIG BEGIN\nHardware target: Pro boards\n[DASHBOARD] CONFIG END\n",
             )
 
     def test_wait_for_flash_mounts_accepts_existing_bootloader_drive(self):

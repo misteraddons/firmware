@@ -212,7 +212,7 @@
       "file_type": "uf2",
       "controller_check": false,
       "local_paths": [
-        "reflex-prism/v1.10.9/prism_dac.uf2"
+        "reflex-prism/prism-v1-r10/prism_dac.uf2"
       ],
       "hardware_check": {
         "type": "serial_hardware_check",
@@ -224,12 +224,16 @@
         "timeout": 30,
         "open_settle": 0.5,
         "command_timeout": 8,
-        "expected_group": "prism-v11",
-        "expected_label": "Prism V1.05/V1.1",
-        "expect": [
-          "Hardware target: V1.05/V1.1 boards"
-        ],
-        "known_mismatches": [
+        "expected_group": "prism-v1",
+        "expected_label": "Reflex Prism DAC V1",
+        "accepted_targets": [
+          {
+            "group": "prism-v11",
+            "label": "Prism V1.05/V1.1",
+            "markers": [
+              "Hardware target: V1.05/V1.1 boards"
+            ]
+          },
           {
             "group": "prism-v12",
             "label": "Prism V1.2",
@@ -237,6 +241,15 @@
               "Hardware target: V1.2 boards"
             ]
           },
+          {
+            "group": "prism-v13",
+            "label": "Prism V1.3 Smart HD15",
+            "markers": [
+              "Hardware target: V1.3 Smart HD15 boards"
+            ]
+          }
+        ],
+        "known_mismatches": [
           {
             "group": "prism-pro",
             "label": "Prism Pro",

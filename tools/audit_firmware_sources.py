@@ -263,8 +263,11 @@ def ensure_list(value: object) -> list[dict]:
 
 
 def semver_key(value: str) -> tuple[int, ...]:
+    match = re.fullmatch(r"prism-v1-r(\d+)", value.lower())
+    if match:
+        return (1, int(match.group(1)))
     numbers = [int(part) for part in re.findall(r"\d+", value)]
-    return tuple(numbers or [0])
+    return (0, *(numbers or [0]))
 
 
 def resolve_latest_semver_file(check: SourceCheck) -> SourceDigest:
