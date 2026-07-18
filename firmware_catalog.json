@@ -46,13 +46,13 @@
       ]
     },
     {
-      "id": "adapt-v1",
-      "label": "Reflex Adapt V1.x (32u4 package)",
+      "id": "reflex-adapt-legacy",
+      "label": "Reflex Adapt Legacy / V1 (32u4 package)",
       "install_method": "cache_only",
       "file_type": "package",
       "controller_check": false,
       "local_paths": [
-        "reflex-adapt/v2.01/reflex-v2.01.zip"
+        "reflex-adapt-legacy/v2.01/reflex-v2.01.zip"
       ],
       "notes": "32u4 firmware package; cache/download only in this RP2040 installer.",
       "sources": [
@@ -63,14 +63,6 @@
           "asset_regex": "^reflex-v.*\\.zip$"
         }
       ]
-    },
-    {
-      "id": "adapt-v2",
-      "label": "Reflex Adapt V2 (coming soon)",
-      "install_method": "coming_soon",
-      "file_type": "uf2",
-      "controller_check": true,
-      "notes": "Placeholder for the upcoming Adapt V2 firmware."
     },
     {
       "id": "reflex-encode-v1",

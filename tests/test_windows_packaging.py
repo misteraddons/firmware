@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BUNDLED_FIRMWARE_PATHS = (
     "mistercade-v1",
     "mistercade-v2",
-    "reflex-adapt",
+    "reflex-adapt-legacy",
     "reflex-ctrl",
     "reflex-encode",
     "reflex-prism",

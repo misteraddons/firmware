@@ -38,7 +38,7 @@ $bundledData = @(
     "$RepoRoot\checksums.sha256;.",
     "$RepoRoot\mistercade-v1;mistercade-v1",
     "$RepoRoot\mistercade-v2;mistercade-v2",
-    "$RepoRoot\reflex-adapt;reflex-adapt",
+    "$RepoRoot\reflex-adapt-legacy;reflex-adapt-legacy",
     "$RepoRoot\reflex-ctrl;reflex-ctrl",
     "$RepoRoot\reflex-encode;reflex-encode",
     "$RepoRoot\reflex-prism;reflex-prism"

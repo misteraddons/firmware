@@ -7,7 +7,7 @@ Firmware files and a small cross-platform installer/cache for MiSTer Addons prod
 | Project | Local file | Source |
 | --- | --- | --- |
 | Reflex Prism | `reflex-prism/prism-v1-r10/prism_dac.uf2` | [`misteraddons/Reflex-Prism` prism-v1-r10](https://github.com/misteraddons/Reflex-Prism/releases/tag/prism-v1-r10) |
-| Reflex Adapt | [`reflex-adapt/v2.01/`](reflex-adapt/v2.01/) | [`misteraddons/Reflex-Adapt-Legacy` v2.01](https://github.com/misteraddons/Reflex-Adapt-Legacy/releases/tag/v2.01) |
+| Reflex Adapt Legacy / V1 | [`reflex-adapt-legacy/v2.01/`](reflex-adapt-legacy/v2.01/) | [`misteraddons/Reflex-Adapt-Legacy` v2.01](https://github.com/misteraddons/Reflex-Adapt-Legacy/releases/tag/v2.01) |
 | Reflex CTRL Genesis 6 | `reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlGenesis6.uf2` | [`OpenStickCommunity/GP2040-CE` v0.7.12](https://github.com/OpenStickCommunity/GP2040-CE/releases/download/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlGenesis6.uf2) |
 | Reflex CTRL NES | `reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlNES.uf2` | [`OpenStickCommunity/GP2040-CE` v0.7.12](https://github.com/OpenStickCommunity/GP2040-CE/releases/download/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlNES.uf2) |
 | Reflex CTRL SNES | `reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlSNES.uf2` | [`OpenStickCommunity/GP2040-CE` v0.7.12](https://github.com/OpenStickCommunity/GP2040-CE/releases/download/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlSNES.uf2) |
