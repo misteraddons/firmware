@@ -46,7 +46,7 @@ python3 firmware_cli.py
 
 On macOS, the RP2040 bootloader should appear as `/Volumes/RPI-RP2`. There is currently no signed/notarized macOS app or DMG; use the Terminal CLI from source.
 
-Cross-platform firmware installer: run `python firmware_installer.py`, choose a product from the dropdown, then connect each RP2040 board. The app uses cached firmware when available, downloads the selected firmware when missing, waits for `RPI-RP2`, copies the UF2, waits for the bootloader drive to detach, then waits for controller/gamepad enumeration or product-specific post-flash checks before showing a green check and returning to the next-device wait. Products with a `pre_flash_bootloader` catalog entry can also enter bootloader mode from a matching USB serial VID:PID before flashing.
+Cross-platform firmware installer: run `python firmware_installer.py`, choose a product and firmware version, then connect each RP2040 board. On startup, the app checks every catalog item for updates in the background and caches anything newer while keeping bundled firmware available offline. It waits for `RPI-RP2`, copies the exact selected UF2, waits for the bootloader drive to detach, then waits for controller/gamepad enumeration or product-specific post-flash checks before showing a green check and returning to the next-device wait. Products with a `pre_flash_bootloader` catalog entry can also enter bootloader mode from a matching USB serial VID:PID before flashing.
 
 The catalog is in `firmware_catalog.json`. GP2040-CE products ship local mirrors and can still resolve from the latest [`OpenStickCommunity/GP2040-CE`](https://github.com/OpenStickCommunity/GP2040-CE/releases/latest) release by asset name.
 
@@ -58,12 +58,14 @@ Terminal CLI mode is also available. With no arguments, `firmware_cli.py` lists 
 python3 firmware_cli.py
 python3 firmware_cli.py --list-catalog
 python3 firmware_cli.py --product reflex-prism
+python3 firmware_cli.py --product reflex-prism --version v1.10.9
+python3 firmware_cli.py --refresh-all
 python3 firmware_cli.py --firmware path/to/firmware.uf2
 ```
 
 Flashing is continuous by default: after one device completes, the CLI waits for the next `RPI-RP2` bootloader drive or configured serial bootloader device. Add `--once` only when you want to flash one device and exit.
 
-When `reflex-prism` is selected, the CLI downloads the latest Prism `prism_dac.uf2` from this GitHub repo when needed, watches for Prism USB CDC VID:PID `16D0:14F6`, verifies the reported hardware target is a supported Reflex Prism DAC V1 target, sends `bootloader`, flashes it, runs the Prism USB CDC sanity check, then waits for disconnect before arming for the next Prism. Catalog Prism firmware cannot start from an already-mounted BOOTSEL/manual `RPI-RP2` drive because the hardware target cannot be verified there; manually browsed custom UF2 files still work for recovery.
+When `reflex-prism` is selected, the updater exposes every bundled or cached Prism version. The current `prism-v1-r10` release supports the listed Prism V1 hardware targets; legacy `v1.10.x` files are restricted to V1.05/V1.1 hardware. The updater watches for Prism USB CDC VID:PID `16D0:14F6`, verifies the connected hardware against the selected version, sends `bootloader`, flashes it, runs the Prism USB CDC sanity check, then waits for disconnect before arming for the next Prism. Catalog Prism firmware cannot start from an already-mounted BOOTSEL/manual `RPI-RP2` drive because the hardware target cannot be verified there; manually browsed custom UF2 files still work for recovery.
 
 The original installer script also accepts the same headless arguments:
 
@@ -81,7 +83,7 @@ Build a Windows executable:
 .\dist\FirmwareInstaller\FirmwareInstaller.exe
 ```
 
-The executable is a PyInstaller onedir build. It bundles the catalog, checksums, mirrored firmware folders, and Windows GUI script, then uses `FirmwareInstaller.exe` itself for catalog, download, and flash subprocesses. No system Python install is required for the built app.
+The executable is a PyInstaller onedir build. It bundles the catalog, checksums, complete mirrored firmware history, and Windows GUI script, then uses `FirmwareInstaller.exe` itself for catalog, download, and flash subprocesses. Downloads are stored by product and version and validated before replacing a cached file. No system Python install is required for the built app.
 Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. The latest mirrored release is `prism-v1-r10`.
 
 Reflex Prism update checks use `firmware_catalog.json` source type `github_repo_latest_semver_file`. The installer lists `misteraddons/firmware/reflex-prism`, prefers `prism-v1-rX` release directories by release number, and downloads `prism_dac.uf2` from the latest directory. `tools/sync_prism_firmware.py` mirrors the latest `misteraddons/Reflex-Prism` release into this repo and updates the catalog, README, and checksums together. Downloads and local UF2 files are validated as structurally valid UF2 images and, for RP2040 entries, must carry UF2 family ID `0xE48BFF56`. Before flashing Prism catalog firmware, the installer opens the normal USB CDC VID:PID `16D0:14F6`, runs `dashboard config get`, and blocks the update unless `Hardware target` is one of the supported Reflex Prism DAC V1 targets; after flashing, it opens the same serial console and sanity-checks `status` plus `dashboard config get`. Source runs need `pyserial`; the Windows bundled installer includes it.

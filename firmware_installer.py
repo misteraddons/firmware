@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import ctypes
+import hashlib
 import json
 import os
 import platform
@@ -27,6 +28,7 @@ import time
 import urllib.error
 import urllib.request
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
@@ -138,6 +140,14 @@ class FirmwareChoice:
 
 
 @dataclass(frozen=True)
+class FirmwareVersion:
+    version: str
+    source: FirmwareSource
+    status: str
+    hardware_check: Optional[dict] = None
+
+
+@dataclass(frozen=True)
 class CatalogItem:
     item_id: str
     label: str
@@ -158,6 +168,8 @@ class DownloadPlan:
     url: str
     file_name: str
     source_label: str
+    version: str = ""
+    immutable_version: bool = False
 
 
 @dataclass(frozen=True)
@@ -454,14 +466,10 @@ def builtin_catalog_items() -> List[CatalogItem]:
 
 def find_catalog_source(item: CatalogItem, root: Optional[Path] = None) -> Tuple[Optional[FirmwareSource], str]:
     root = (root or default_firmware_root()).resolve()
-    cached = find_cached_catalog_file(item, root)
-    if cached:
-        return FirmwareSource(cached), "cached"
-
-    for local_path in item.local_paths:
-        candidate = (root / local_path).resolve()
-        if candidate.exists():
-            return FirmwareSource(candidate), "bundled"
+    versions = catalog_firmware_versions(item, root)
+    if versions:
+        selected = versions[0]
+        return selected.source, selected.status
 
     if item.install_method == "coming_soon":
         return None, "coming soon"
@@ -475,7 +483,7 @@ def find_cached_catalog_file(item: CatalogItem, root: Optional[Path] = None) -> 
     if not cache_dir.is_dir():
         return None
 
-    candidates = [path for path in cache_dir.iterdir() if path.is_file()]
+    candidates = [path for path in cache_dir.rglob("*") if path.is_file()]
     if item.file_type == "uf2":
         candidates = [path for path in candidates if path.suffix.lower() == ".uf2"]
     elif item.file_type == "package":
@@ -483,7 +491,38 @@ def find_cached_catalog_file(item: CatalogItem, root: Optional[Path] = None) -> 
 
     if not candidates:
         return None
-    return max(candidates, key=lambda path: path.stat().st_mtime)
+    firmware_root = (root or default_firmware_root()).resolve()
+    return max(
+        candidates,
+        key=lambda path: (
+            semver_key(_catalog_version_from_path(item, path, firmware_root)),
+            path.stat().st_mtime,
+        ),
+    )
+
+
+def _download_catalog_plan(
+    item: CatalogItem,
+    plan: DownloadPlan,
+    root: Path,
+    *,
+    force_download: bool,
+    log: Optional[Callable[[str], None]],
+) -> FirmwareSource:
+    version_dir = safe_file_name(_cache_version_for_plan(item, plan))
+    target = catalog_item_cache_dir(item, root) / version_dir / safe_file_name(plan.file_name)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if force_download or not target.exists():
+        if log:
+            log(f"Downloading {item.label} from {plan.source_label}: {plan.file_name}")
+        download_file(
+            plan.url,
+            target,
+            validate=lambda path: validate_catalog_firmware(item, FirmwareSource(path)),
+        )
+    firmware = FirmwareSource(target)
+    validate_catalog_firmware(item, firmware)
+    return firmware
 
 
 def ensure_catalog_firmware(
@@ -511,15 +550,13 @@ def ensure_catalog_firmware(
     for source in item.sources:
         try:
             plan = resolve_download_plan(source)
-            target = catalog_item_cache_dir(item, root) / safe_file_name(plan.file_name)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if force_download or not target.exists():
-                if log:
-                    log(f"Downloading {item.label} from {plan.source_label}: {plan.file_name}")
-                download_file(plan.url, target)
-            source = FirmwareSource(target)
-            validate_catalog_firmware(item, source)
-            return source
+            return _download_catalog_plan(
+                item,
+                plan,
+                root,
+                force_download=force_download,
+                log=log,
+            )
         except Exception as error:
             last_error = error
             if log:
@@ -537,6 +574,75 @@ def ensure_catalog_firmware(
     raise FirmwareError(f"Could not find firmware for {item.label}.")
 
 
+def refresh_catalog_firmware(
+    item_id: str,
+    root: Optional[Path] = None,
+    log: Optional[Callable[[str], None]] = None,
+) -> FirmwareSource:
+    root = (root or default_firmware_root()).resolve()
+    item = get_catalog_item(item_id, root)
+    if item.install_method == "coming_soon":
+        raise FirmwareError(f"{item.label} firmware is coming soon.")
+
+    last_error: Optional[Exception] = None
+    for source in item.sources:
+        try:
+            plan = resolve_download_plan(source)
+            if plan.immutable_version:
+                for version in catalog_firmware_versions(item, root):
+                    if version.version.casefold() == plan.version.casefold():
+                        validate_catalog_firmware(item, version.source)
+                        if log:
+                            log(f"{item.label} is current ({version.version}).")
+                        return version.source
+            return _download_catalog_plan(
+                item,
+                plan,
+                root,
+                force_download=not plan.immutable_version,
+                log=log,
+            )
+        except Exception as error:
+            last_error = error
+            if log:
+                log(f"Update check failed for {item.label}: {error}")
+
+    local, status = find_catalog_source(item, root)
+    if local:
+        validate_catalog_firmware(item, local)
+        if log:
+            log(f"Using {status} firmware for {item.label}.")
+        return local
+    if last_error:
+        raise FirmwareError(f"Could not refresh {item.label}: {last_error}")
+    raise FirmwareError(f"No update source configured for {item.label}.")
+
+
+def refresh_all_catalog_firmware(
+    root: Optional[Path] = None,
+    log: Optional[Callable[[str], None]] = None,
+    max_workers: int = 4,
+) -> Tuple[Dict[str, FirmwareSource], Dict[str, str]]:
+    root = (root or default_firmware_root()).resolve()
+    items = [item for item in load_catalog(root) if item.install_method != "coming_soon"]
+    refreshed: Dict[str, FirmwareSource] = {}
+    errors: Dict[str, str] = {}
+    with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(items) or 1))) as executor:
+        futures = {
+            executor.submit(refresh_catalog_firmware, item.item_id, root, log): item
+            for item in items
+        }
+        for future in as_completed(futures):
+            item = futures[future]
+            try:
+                refreshed[item.item_id] = future.result()
+            except Exception as error:
+                errors[item.item_id] = str(error)
+                if log:
+                    log(f"Could not refresh {item.label}: {error}")
+    return refreshed, errors
+
+
 def resolve_download_plan(source: dict) -> DownloadPlan:
     source_type = source.get("type")
     if source_type == "github_release_asset":
@@ -547,13 +653,29 @@ def resolve_download_plan(source: dict) -> DownloadPlan:
         return resolve_github_latest_semver_file(source)
     if source_type == "url":
         url = source["url"]
-        return DownloadPlan(url=url, file_name=source.get("file_name") or Path(url).name, source_label=url)
+        return DownloadPlan(
+            url=url,
+            file_name=source.get("file_name") or Path(url).name,
+            source_label=url,
+            version=str(source.get("version") or "latest"),
+        )
     raise FirmwareError(f"Unsupported source type: {source_type}")
 
 
 def validate_catalog_firmware(item: CatalogItem, source: FirmwareSource) -> None:
     if item.file_type == "uf2":
         validate_firmware_source(source, item.expected_uf2_family)
+        return
+    if source.path.stat().st_size <= 0:
+        raise FirmwareError(f"{source.display_name} is empty.")
+    if source.path.suffix.lower() == ".zip":
+        try:
+            with zipfile.ZipFile(source.path) as archive:
+                bad_entry = archive.testzip()
+        except zipfile.BadZipFile as error:
+            raise FirmwareError(f"{source.display_name} is not a valid ZIP package.") from error
+        if bad_entry:
+            raise FirmwareError(f"{source.display_name} contains a corrupt ZIP entry: {bad_entry}")
 
 
 def resolve_github_release_asset(source: dict) -> DownloadPlan:
@@ -575,6 +697,8 @@ def resolve_github_release_asset(source: dict) -> DownloadPlan:
         url=asset["browser_download_url"],
         file_name=asset["name"],
         source_label=f"{repo} {release_data.get('tag_name', release)}",
+        version=str(release_data.get("tag_name") or release),
+        immutable_version=True,
     )
 
 
@@ -590,6 +714,7 @@ def resolve_github_repo_file(source: dict) -> DownloadPlan:
         url=data["download_url"],
         file_name=data["name"],
         source_label=f"{repo}/{file_path}",
+        version=str(ref),
     )
 
 
@@ -613,6 +738,8 @@ def resolve_github_latest_semver_file(source: dict) -> DownloadPlan:
         url=data["download_url"],
         file_name=data["name"],
         source_label=f"{repo}/{latest.get('path')}",
+        version=str(latest.get("name") or "latest"),
+        immutable_version=True,
     )
 
 
@@ -628,13 +755,19 @@ def request_json(url: str) -> object:
         return json.loads(response.read().decode("utf-8"))
 
 
-def download_file(url: str, target: Path) -> None:
+def download_file(
+    url: str,
+    target: Path,
+    validate: Optional[Callable[[Path], None]] = None,
+) -> None:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    temp = target.with_suffix(target.suffix + ".tmp")
+    temp = target.with_name(f"{target.stem}.tmp{target.suffix}")
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
             with temp.open("wb") as stream:
                 shutil.copyfileobj(response, stream, COPY_BUFFER_SIZE)
+        if validate:
+            validate(temp)
         temp.replace(target)
     except Exception:
         with contextlib.suppress(OSError):
@@ -757,9 +890,212 @@ def _firmware_choice_label(source: FirmwareSource, root: Path) -> str:
 def _find_version_label(parts: Sequence[str]) -> str:
     for part in parts:
         lower = part.lower()
-        if re.match(r"^v?\d", lower) or re.match(r"^main-\d{4}$", lower):
+        if (
+            re.match(r"^v?\d", lower)
+            or re.match(r"^main-\d{4}$", lower)
+            or re.match(r"^prism-v\d+-r\d+$", lower)
+            or lower in {"main", "latest"}
+        ):
             return part
     return ""
+
+
+def firmware_source_key(source: FirmwareSource) -> str:
+    return f"{source.path.resolve()}::{source.zip_member or ''}"
+
+
+def firmware_source_digest(source: FirmwareSource) -> str:
+    digest = hashlib.sha256()
+    with source.open_binary() as stream:
+        while True:
+            chunk = stream.read(COPY_BUFFER_SIZE)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _catalog_local_version(item: CatalogItem) -> str:
+    for local_path in item.local_paths:
+        local_version = _find_version_label(Path(local_path).parts[1:-1])
+        if local_version:
+            return local_version
+    return ""
+
+
+def _cache_version_for_plan(item: CatalogItem, plan: DownloadPlan) -> str:
+    version = plan.version or "latest"
+    if plan.immutable_version or version.casefold() not in {"main", "master", "latest"}:
+        return version
+    return _catalog_local_version(item) or version
+
+
+def _catalog_candidate_matches(item: CatalogItem, path: Path) -> bool:
+    if not path.is_file() or path.name.lower().endswith(".tmp"):
+        return False
+    if item.file_type == "uf2":
+        return path.suffix.lower() == ".uf2"
+    if item.file_type == "package":
+        return path.suffix.lower() in {".zip", ".gz", ".tgz", ".bin", ".hex"}
+    return True
+
+
+def _catalog_candidate_paths(item: CatalogItem, root: Path) -> List[Tuple[Path, str]]:
+    candidates: Dict[Path, str] = {}
+    for local_path in item.local_paths:
+        relative = Path(local_path)
+        explicit = (root / relative).resolve()
+        if _catalog_candidate_matches(item, explicit):
+            candidates.setdefault(explicit, "bundled")
+
+        if not relative.parts:
+            continue
+        project_root = (root / relative.parts[0]).resolve()
+        if not project_root.is_dir():
+            continue
+        for candidate in project_root.rglob(relative.name):
+            resolved = candidate.resolve()
+            if _catalog_candidate_matches(item, resolved):
+                candidates.setdefault(resolved, "bundled")
+
+    cache_dir = catalog_item_cache_dir(item, root)
+    if cache_dir.is_dir():
+        for candidate in cache_dir.rglob("*"):
+            resolved = candidate.resolve()
+            if _catalog_candidate_matches(item, resolved):
+                candidates.setdefault(resolved, "cached")
+    return list(candidates.items())
+
+
+def _catalog_version_from_path(item: CatalogItem, path: Path, root: Path) -> str:
+    cache_dir = catalog_item_cache_dir(item, root).resolve()
+    try:
+        cache_relative = path.resolve().relative_to(cache_dir)
+        if len(cache_relative.parts) > 1:
+            return cache_relative.parts[0]
+    except ValueError:
+        pass
+
+    try:
+        relative = path.resolve().relative_to(root.resolve())
+        version = _find_version_label(relative.parts[1:-1])
+        if version:
+            return version
+    except ValueError:
+        pass
+
+    match = re.search(r"(?<!\d)(\d+\.\d+(?:\.\d+)*)(?!\d)", path.name)
+    if match:
+        return f"v{match.group(1)}"
+    return "current"
+
+
+def _hardware_check_for_group(check: dict, expected_group: str) -> dict:
+    targets = list(check.get("accepted_targets", []) or []) + list(check.get("known_mismatches", []) or [])
+    expected = next((target for target in targets if target.get("group") == expected_group), None)
+    if expected is None:
+        return check
+
+    narrowed = dict(check)
+    narrowed.pop("accepted_targets", None)
+    narrowed["expected_group"] = expected_group
+    narrowed["expected_label"] = str(expected.get("label") or expected_group)
+    narrowed["expect"] = list(expected.get("markers", []) or [])
+    narrowed["known_mismatches"] = [
+        target for target in targets if target.get("group") != expected_group
+    ]
+    return narrowed
+
+
+def catalog_hardware_check_for_version(item: CatalogItem, version: str) -> Optional[dict]:
+    check = item.hardware_check
+    if not check or item.item_id != "reflex-prism":
+        return check
+
+    lower = version.casefold()
+    if re.match(r"^v?1\.10(?:\.|$)", lower) or re.match(r"^v?1\.1(?:\.|$)", lower):
+        return _hardware_check_for_group(check, "prism-v11")
+    if re.match(r"^v?1\.20(?:\.|$)", lower) or re.match(r"^v?1\.2(?:\.|$)", lower):
+        return _hardware_check_for_group(check, "prism-v12")
+    if re.match(r"^v?1\.30(?:\.|$)", lower) or re.match(r"^v?1\.3(?:\.|$)", lower):
+        return _hardware_check_for_group(check, "prism-v13")
+    return check
+
+
+def catalog_firmware_versions(item: CatalogItem, root: Optional[Path] = None) -> List[FirmwareVersion]:
+    root = (root or default_firmware_root()).resolve()
+    by_digest: Dict[str, FirmwareVersion] = {}
+    candidates = sorted(
+        _catalog_candidate_paths(item, root),
+        key=lambda entry: (
+            0 if entry[1] == "bundled" else 1,
+            0 if entry[1] == "bundled" else -entry[0].stat().st_mtime,
+        ),
+    )
+    for path, status in candidates:
+        source = FirmwareSource(path)
+        version = _catalog_version_from_path(item, path, root)
+        if status == "cached" and version.casefold() in {"main", "master", "latest"}:
+            version = _catalog_local_version(item) or version
+        candidate = FirmwareVersion(
+            version=version,
+            source=source,
+            status=status,
+            hardware_check=catalog_hardware_check_for_version(item, version),
+        )
+        if version == "current" and status == "cached" and item.hardware_check:
+            continue
+        digest_key = f"{firmware_source_digest(source)}:{version.casefold()}"
+        existing_digest = by_digest.get(digest_key)
+        if existing_digest:
+            best_version = max(
+                (existing_digest.version, candidate.version),
+                key=lambda value: (semver_key(value), value.casefold()),
+            )
+            preferred = (
+                candidate
+                if existing_digest.status == "cached" and candidate.status == "bundled"
+                else existing_digest
+            )
+            by_digest[digest_key] = FirmwareVersion(
+                version=best_version,
+                source=preferred.source,
+                status=preferred.status,
+                hardware_check=catalog_hardware_check_for_version(item, best_version),
+            )
+            continue
+        by_digest[digest_key] = candidate
+
+    versions: Dict[str, FirmwareVersion] = {}
+    for candidate in by_digest.values():
+        version = candidate.version
+        key = version.casefold()
+        existing = versions.get(key)
+        if existing is None or (existing.status == "bundled" and candidate.status == "cached"):
+            versions[key] = candidate
+
+    return sorted(
+        versions.values(),
+        key=lambda entry: (semver_key(entry.version), entry.version.casefold()),
+        reverse=True,
+    )
+
+
+def select_catalog_firmware_version(
+    item: CatalogItem,
+    requested_version: Optional[str] = None,
+    root: Optional[Path] = None,
+) -> FirmwareVersion:
+    versions = catalog_firmware_versions(item, root)
+    if not versions:
+        raise FirmwareError(f"No firmware versions are available for {item.label}.")
+    if not requested_version or requested_version.casefold() == "latest":
+        return versions[0]
+    for version in versions:
+        if version.version.casefold() == requested_version.casefold():
+            return version
+    available = ", ".join(version.version for version in versions)
+    raise FirmwareError(f"Unknown {item.label} firmware version {requested_version!r}. Available: {available}")
 
 
 def _title_from_slug(value: str) -> str:
@@ -1762,28 +2098,36 @@ def launch_gui() -> int:
             self.root = root
             self.firmware: Optional[FirmwareSource] = None
             self.selected_choice: Optional[FirmwareChoice] = None
+            self.selected_version: Optional[FirmwareVersion] = None
             self.choice_by_label: Dict[str, FirmwareChoice] = {}
+            self.version_by_label: Dict[str, FirmwareVersion] = {}
             self.catalog_choices: List[FirmwareChoice] = []
             self.connected_choice_keys: Set[str] = set()
             self.device_detection_after_id: Optional[str] = None
             self.device_detection_error_logged = False
             self.worker: Optional[threading.Thread] = None
+            self.startup_refresh_worker: Optional[threading.Thread] = None
+            self.startup_refresh_running = False
+            self.version_user_selected = False
+            self.closing = False
             self.stop_event = threading.Event()
 
             root.title("UF2 Firmware Installer")
-            root.geometry("760x520")
-            root.minsize(680, 440)
+            root.geometry("780x570")
+            root.minsize(700, 500)
+            root.protocol("WM_DELETE_WINDOW", self.close)
 
             self.choice_var = tk.StringVar(value="")
+            self.version_var = tk.StringVar(value="")
             self.verify_var = tk.BooleanVar(value=True)
             self.status_var = tk.StringVar(value="Select firmware, then connect a device.")
 
             frame = ttk.Frame(root, padding=16)
             frame.pack(fill="both", expand=True)
             frame.columnconfigure(0, weight=1)
-            frame.rowconfigure(5, weight=1)
+            frame.rowconfigure(7, weight=1)
 
-            title = ttk.Label(frame, text="RP2040 UF2 Firmware Installer", font=("TkDefaultFont", 16, "bold"))
+            title = ttk.Label(frame, text="MiSTer Addons Firmware Installer", font=("TkDefaultFont", 16, "bold"))
             title.grid(row=0, column=0, columnspan=4, sticky="w")
 
             ttk.Label(frame, text="Firmware").grid(row=1, column=0, sticky="w", pady=(14, 2))
@@ -1798,12 +2142,18 @@ def launch_gui() -> int:
             self.select_button = ttk.Button(frame, text="Browse...", command=self.select_firmware)
             self.select_button.grid(row=2, column=3, sticky="e", padx=(8, 0), pady=(0, 8))
 
+            ttk.Label(frame, text="Version").grid(row=3, column=0, sticky="w", pady=(4, 2))
+
+            self.version_combo = ttk.Combobox(frame, textvariable=self.version_var, state="readonly")
+            self.version_combo.grid(row=4, column=0, columnspan=4, sticky="ew", pady=(0, 8))
+            self.version_combo.bind("<<ComboboxSelected>>", self.select_dropdown_version)
+
             self.verify_check = ttk.Checkbutton(
                 frame,
                 text="Wait for controller/gamepad after flashing",
                 variable=self.verify_var,
             )
-            self.verify_check.grid(row=3, column=0, columnspan=4, sticky="w")
+            self.verify_check.grid(row=5, column=0, columnspan=4, sticky="w")
 
             self.status_label = tk.Label(
                 frame,
@@ -1812,24 +2162,25 @@ def launch_gui() -> int:
                 fg="gray25",
                 font=("TkDefaultFont", 12, "bold"),
             )
-            self.status_label.grid(row=4, column=0, columnspan=4, sticky="ew", pady=(14, 8))
+            self.status_label.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(14, 8))
 
             self.log_text = tk.Text(frame, height=14, wrap="word", state="disabled")
-            self.log_text.grid(row=5, column=0, columnspan=4, sticky="nsew")
+            self.log_text.grid(row=7, column=0, columnspan=4, sticky="nsew")
 
             scrollbar = ttk.Scrollbar(frame, orient="vertical", command=self.log_text.yview)
-            scrollbar.grid(row=5, column=4, sticky="ns")
+            scrollbar.grid(row=7, column=4, sticky="ns")
             self.log_text.configure(yscrollcommand=scrollbar.set)
 
             self.start_button = ttk.Button(frame, text="Start", command=self.start)
-            self.start_button.grid(row=6, column=2, sticky="e", pady=(12, 0))
+            self.start_button.grid(row=8, column=2, sticky="e", pady=(12, 0))
 
             self.stop_button = ttk.Button(frame, text="Stop", command=self.stop, state="disabled")
-            self.stop_button.grid(row=6, column=3, sticky="e", padx=(8, 0), pady=(12, 0))
+            self.stop_button.grid(row=8, column=3, sticky="e", padx=(8, 0), pady=(12, 0))
 
             self.load_firmware_choices()
             self.schedule_device_detection_refresh()
             self.log("Select firmware, then connect a board normally or in BOOTSEL/RPI-RP2 mode.")
+            self.start_startup_refresh()
 
         def load_firmware_choices(self) -> None:
             self.catalog_choices = discover_firmware_choices()
@@ -1863,7 +2214,8 @@ def launch_gui() -> int:
             return True
 
         def schedule_device_detection_refresh(self) -> None:
-            self.device_detection_after_id = self.root.after(2000, self.refresh_connected_devices)
+            if not self.closing:
+                self.device_detection_after_id = self.root.after(2000, self.refresh_connected_devices)
 
         def refresh_connected_devices(self) -> None:
             self.device_detection_after_id = None
@@ -1890,7 +2242,11 @@ def launch_gui() -> int:
             )
             return [choice for _index, choice in indexed]
 
-        def populate_firmware_combo(self, selected_key: Optional[str] = None) -> List[str]:
+        def populate_firmware_combo(
+            self,
+            selected_key: Optional[str] = None,
+            selected_source_key: Optional[str] = None,
+        ) -> List[str]:
             ordered_choices = self.ordered_firmware_choices()
             self.choice_by_label = {self.choice_display_label(choice): choice for choice in ordered_choices}
             labels = list(self.choice_by_label)
@@ -1901,11 +2257,17 @@ def launch_gui() -> int:
 
             if selected_key is None and self.selected_choice:
                 selected_key = firmware_choice_key(self.selected_choice)
+            if selected_source_key is None and self.selected_version:
+                selected_source_key = firmware_source_key(self.selected_version.source)
 
             selected = self.choice_for_key(selected_key) if selected_key else None
             if selected is None:
                 selected = ordered_choices[0]
-            self.apply_choice(selected, log_selected=False)
+            self.apply_choice(
+                selected,
+                log_selected=False,
+                selected_source_key=selected_source_key,
+            )
             return labels
 
         def choice_for_key(self, key: Optional[str]) -> Optional[FirmwareChoice]:
@@ -1921,37 +2283,119 @@ def launch_gui() -> int:
             choice = self.choice_by_label.get(label)
             if choice is None:
                 return
+            self.version_user_selected = False
             self.apply_choice(choice, log_selected=log_selected)
 
-        def apply_choice(self, choice: FirmwareChoice, log_selected: bool = True) -> None:
+        def select_dropdown_version(self, _event: object = None) -> None:
+            version = self.version_by_label.get(self.version_var.get())
+            if version:
+                self.version_user_selected = True
+                self.apply_version(version)
+
+        def populate_version_combo(
+            self,
+            choice: FirmwareChoice,
+            selected_source_key: Optional[str] = None,
+        ) -> None:
+            if choice.item_id:
+                item = get_catalog_item(choice.item_id)
+                versions = catalog_firmware_versions(item)
+            elif choice.source:
+                versions = [FirmwareVersion("custom", choice.source, "custom", choice.hardware_check)]
+            else:
+                versions = []
+
+            self.version_by_label = {}
+            labels: List[str] = []
+            for index, version in enumerate(versions):
+                latest = " [latest]" if index == 0 else ""
+                label = f"{version.version} ({version.status}){latest}"
+                self.version_by_label[label] = version
+                labels.append(label)
+            self.version_combo.configure(values=labels)
+
+            if not versions:
+                self.selected_version = None
+                self.firmware = None
+                self.version_var.set("Download required")
+                self.version_combo.configure(state="disabled")
+                return
+
+            selected = None
+            if selected_source_key:
+                selected = next(
+                    (
+                        version
+                        for version in versions
+                        if firmware_source_key(version.source) == selected_source_key
+                    ),
+                    None,
+                )
+            if selected is None:
+                selected = versions[0]
+            self.version_combo.configure(state="readonly" if len(versions) > 1 else "disabled")
+            self.apply_version(selected, log_selected=False)
+
+        def apply_version(self, version: FirmwareVersion, log_selected: bool = True) -> None:
+            self.selected_version = version
+            self.firmware = version.source
+            for label, candidate in self.version_by_label.items():
+                if firmware_source_key(candidate.source) == firmware_source_key(version.source):
+                    self.version_var.set(label)
+                    break
+            self.update_selection_status()
+            if log_selected:
+                self.log(f"Firmware version selected: {version.version} - {version.source.display_name}")
+
+        def apply_choice(
+            self,
+            choice: FirmwareChoice,
+            log_selected: bool = True,
+            selected_source_key: Optional[str] = None,
+        ) -> None:
             self.selected_choice = choice
-            self.firmware = choice.source
             self.choice_var.set(self.choice_display_label(choice))
             if choice.controller_check is None:
                 self.verify_var.set(is_controller_firmware(choice.source) if choice.source else False)
             else:
                 self.verify_var.set(choice.controller_check)
+            self.populate_version_combo(choice, selected_source_key=selected_source_key)
+            self.update_selection_status()
+
+            if log_selected:
+                self.log(f"Firmware selected: {choice.label}")
+
+        def selected_hardware_check(self) -> Optional[dict]:
+            if self.selected_version:
+                return self.selected_version.hardware_check
+            if self.selected_choice:
+                return self.selected_choice.hardware_check
+            return None
+
+        def update_selection_status(self) -> None:
+            choice = self.selected_choice
+            if choice is None:
+                self.set_status("Select firmware, then connect a device.", "gray25")
+                return
+            firmware = self.firmware
+            status = self.selected_version.status if self.selected_version else choice.status
+            hardware_check = self.selected_hardware_check()
 
             if choice.install_method == "coming_soon":
                 self.set_status("Coming soon; no firmware source configured yet.", "orange")
             elif choice.install_method != "rp2040":
-                self.set_status(f"{choice.status.title()}; download/cache only for this 32u4 package.", "orange")
-            elif choice.source and firmware_choice_key(choice) in self.connected_choice_keys:
-                self.set_status(f"Ready ({choice.status}); connected device detected.", "green")
-            elif choice.source and choice.hardware_check:
-                self.set_status(f"Ready ({choice.status}); connect normally for hardware-verified flashing.", "gray25")
-            elif choice.source and choice.pre_flash_bootloader:
-                self.set_status(f"Ready ({choice.status}); normal serial or BOOTSEL/RPI-RP2 supported.", "gray25")
-            elif choice.source:
-                self.set_status(f"Ready ({choice.status}).", "gray25")
+                self.set_status(f"{status.title()}; download/cache only for this package.", "orange")
+            elif firmware and firmware_choice_key(choice) in self.connected_choice_keys:
+                self.set_status(f"Ready ({status}); connected device detected.", "green")
+            elif firmware and hardware_check:
+                target = str(hardware_check.get("expected_label") or "verified hardware")
+                self.set_status(f"Ready ({status}); connect normally for {target} verification.", "gray25")
+            elif firmware and choice.pre_flash_bootloader:
+                self.set_status(f"Ready ({status}); normal serial or BOOTSEL/RPI-RP2 supported.", "gray25")
+            elif firmware:
+                self.set_status(f"Ready ({status}).", "gray25")
             else:
                 self.set_status("Download required; Start will download first.", "orange")
-
-            if log_selected:
-                if choice.source:
-                    self.log(f"Firmware selected: {choice.source.display_name}")
-                else:
-                    self.log(f"Firmware selected: {choice.label} ({choice.status})")
 
         def select_firmware(self) -> None:
             file_name = filedialog.askopenfilename(
@@ -1988,12 +2432,60 @@ def launch_gui() -> int:
                 self.catalog_choices.append(choice)
                 self.firmware_combo.configure(state="readonly")
             self.populate_firmware_combo(selected_key=firmware_choice_key(choice))
-            self.apply_choice(choice)
+
+        def start_startup_refresh(self) -> None:
+            if self.startup_refresh_running:
+                return
+            self.startup_refresh_running = True
+            self.download_button.configure(state="disabled")
+            self.log("Checking all catalog firmware for updates...")
+            self.startup_refresh_worker = threading.Thread(
+                target=self.startup_refresh_main,
+                daemon=True,
+            )
+            self.startup_refresh_worker.start()
+
+        def startup_refresh_main(self) -> None:
+            _refreshed, errors = refresh_all_catalog_firmware(log=self.thread_log)
+            if not self.closing:
+                self.root.after(0, lambda: self.finish_startup_refresh(errors))
+
+        def finish_startup_refresh(self, errors: Dict[str, str]) -> None:
+            if self.closing:
+                return
+            if self.worker and self.worker.is_alive():
+                self.root.after(500, lambda: self.finish_startup_refresh(errors))
+                return
+
+            selected_key = firmware_choice_key(self.selected_choice) if self.selected_choice else None
+            selected_source_key = (
+                firmware_source_key(self.selected_version.source)
+                if self.selected_version and self.version_user_selected
+                else ""
+            )
+            custom_choice = self.selected_choice if self.selected_choice and not self.selected_choice.item_id else None
+            self.catalog_choices = discover_firmware_choices()
+            if custom_choice:
+                self.catalog_choices.append(custom_choice)
+            self.refresh_connected_choice_keys(log_errors=False)
+            self.populate_firmware_combo(
+                selected_key=selected_key,
+                selected_source_key=selected_source_key,
+            )
+            self.startup_refresh_running = False
+            self.download_button.configure(state="normal")
+            if errors:
+                self.log(f"Update check completed with {len(errors)} source error(s); bundled firmware remains available.")
+            else:
+                self.log("Startup update check complete; all catalog firmware is ready.")
 
         def download_selected(self) -> None:
             choice = self.selected_choice
             if choice is None or choice.item_id is None:
                 self.set_status("Select a catalog firmware item to download.", "orange")
+                return
+            if self.startup_refresh_running:
+                self.set_status("The startup firmware update check is already running.", "orange")
                 return
             if self.worker and self.worker.is_alive():
                 return
@@ -2050,7 +2542,12 @@ def launch_gui() -> int:
             choice = self.selected_choice
             firmware = self.firmware
             verify = bool(self.verify_var.get())
-            self.worker = threading.Thread(target=self.worker_main, args=(choice, firmware, verify), daemon=True)
+            hardware_check = self.selected_hardware_check()
+            self.worker = threading.Thread(
+                target=self.worker_main,
+                args=(choice, firmware, verify, hardware_check),
+                daemon=True,
+            )
             self.worker.start()
 
         def stop(self) -> None:
@@ -2076,23 +2573,30 @@ def launch_gui() -> int:
         def refresh_choice_after_download(self, label: str) -> None:
             self.catalog_choices = discover_firmware_choices()
             self.refresh_connected_choice_keys(log_errors=False)
-            self.populate_firmware_combo(selected_key=label)
+            self.version_user_selected = False
+            self.populate_firmware_combo(selected_key=label, selected_source_key="")
 
         def worker_main(
             self,
             choice: Optional[FirmwareChoice],
             firmware: Optional[FirmwareSource],
             verify: bool,
+            hardware_check: Optional[dict],
         ) -> None:
             try:
                 if choice and choice.item_id:
                     if choice.install_method == "coming_soon":
                         raise FirmwareError(f"{choice.label} firmware is coming soon.")
-                    firmware = ensure_catalog_firmware(
-                        choice.item_id,
-                        force_download=False,
-                        log=self.thread_log,
-                    )
+                    item = get_catalog_item(choice.item_id)
+                    if firmware is None:
+                        firmware = ensure_catalog_firmware(
+                            choice.item_id,
+                            force_download=False,
+                            log=self.thread_log,
+                        )
+                        hardware_check = item.hardware_check
+                    else:
+                        validate_catalog_firmware(item, firmware)
                     if choice.install_method != "rp2040":
                         self.thread_log(f"Cached firmware package: {firmware.display_name}")
                         self.thread_status("Cached. 32u4 flashing is not implemented in this RPI-RP2 installer.", "green")
@@ -2106,7 +2610,7 @@ def launch_gui() -> int:
                     verify_controller=verify,
                     post_flash_check=choice.post_flash_check if choice else None,
                     pre_flash_bootloader=choice.pre_flash_bootloader if choice else None,
-                    hardware_check=choice.hardware_check if choice else None,
+                    hardware_check=hardware_check,
                     stop_event=self.stop_event,
                     log=self.thread_log,
                     status=self.thread_status,
@@ -2123,15 +2627,18 @@ def launch_gui() -> int:
         def set_busy(self, busy: bool) -> None:
             state = "disabled" if busy else "normal"
             self.select_button.configure(state=state)
-            self.download_button.configure(state=state)
+            self.download_button.configure(state="disabled" if busy or self.startup_refresh_running else "normal")
             if busy:
                 self.firmware_combo.configure(state="disabled")
+                self.version_combo.configure(state="disabled")
                 self.start_button.configure(state="disabled")
                 self.stop_button.configure(state="normal")
                 self.verify_check.configure(state="disabled")
             else:
                 if self.choice_by_label:
                     self.firmware_combo.configure(state="readonly")
+                if len(self.version_by_label) > 1:
+                    self.version_combo.configure(state="readonly")
                 self.start_button.configure(state="normal")
                 self.stop_button.configure(state="disabled")
                 self.verify_check.configure(state="normal")
@@ -2140,10 +2647,14 @@ def launch_gui() -> int:
             self.set_busy(False)
 
         def thread_log(self, message: str) -> None:
-            self.root.after(0, lambda: self.log(message))
+            if not self.closing:
+                with contextlib.suppress(RuntimeError, tk.TclError):
+                    self.root.after(0, lambda: self.log(message))
 
         def thread_status(self, message: str, color: str) -> None:
-            self.root.after(0, lambda: self.set_status(message, color))
+            if not self.closing:
+                with contextlib.suppress(RuntimeError, tk.TclError):
+                    self.root.after(0, lambda: self.set_status(message, color))
 
         def set_status(self, message: str, color: str) -> None:
             self.status_var.set(message)
@@ -2156,6 +2667,14 @@ def launch_gui() -> int:
             self.log_text.see("end")
             self.log_text.configure(state="disabled")
 
+        def close(self) -> None:
+            self.closing = True
+            self.stop_event.set()
+            if self.device_detection_after_id:
+                with contextlib.suppress(tk.TclError):
+                    self.root.after_cancel(self.device_detection_after_id)
+            self.root.destroy()
+
     root = tk.Tk()
     App(root)
     root.mainloop()
@@ -2166,8 +2685,10 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Flash UF2 firmware to RPI-RP2 bootloader drives.")
     parser.add_argument("--firmware", type=Path, help="Path to a .uf2 file or .zip containing a .uf2 file.")
     parser.add_argument("--product", help="Catalog product id to download/use.")
+    parser.add_argument("--version", help="Catalog firmware version to use with --product; defaults to latest.")
     parser.add_argument("--download", action="store_true", help="Download/cache the selected --product and exit.")
     parser.add_argument("--refresh", action="store_true", help="Force re-download when used with --download or --product.")
+    parser.add_argument("--refresh-all", action="store_true", help="Check/cache all catalog firmware and exit.")
     parser.add_argument("--list-catalog", action="store_true", help="List catalog firmware options and exit.")
     parser.add_argument("--catalog-json", action="store_true", help="Print catalog firmware options as JSON and exit.")
     parser.add_argument("--zip-member", help="UF2 path inside a .zip package when multiple are present.")
@@ -2200,6 +2721,25 @@ def catalog_choice_records(root: Optional[Path] = None) -> List[dict]:
     records: List[dict] = []
     for choice in discover_firmware_choices(root):
         source = choice.source.display_name if choice.source else ""
+        versions: List[dict] = []
+        if choice.item_id:
+            item = get_catalog_item(choice.item_id, root)
+            for version in catalog_firmware_versions(item, root):
+                hardware_target = ""
+                if version.hardware_check:
+                    hardware_target = str(
+                        version.hardware_check.get("expected_label")
+                        or version.hardware_check.get("expected_group")
+                        or ""
+                    )
+                versions.append(
+                    {
+                        "version": version.version,
+                        "status": version.status,
+                        "source": version.source.display_name,
+                        "hardware_target": hardware_target,
+                    }
+                )
         records.append(
             {
                 "id": choice.item_id or "",
@@ -2211,6 +2751,7 @@ def catalog_choice_records(root: Optional[Path] = None) -> List[dict]:
                 "post_flash_check": bool(choice.post_flash_check),
                 "status": choice.status,
                 "source": source,
+                "versions": versions,
             }
         )
     return records
@@ -2221,6 +2762,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     post_flash_check: Optional[dict] = None
     pre_flash_bootloader: Optional[dict] = None
     hardware_check: Optional[dict] = None
+    if args.version and not args.product:
+        print("Firmware error: --version requires --product.", file=sys.stderr)
+        return 2
+
+    if args.refresh_all:
+        refreshed, errors = refresh_all_catalog_firmware(log=_print_log)
+        print(f"Checked {len(refreshed) + len(errors)} catalog item(s); {len(refreshed)} ready, {len(errors)} failed.")
+        for item_id, error in errors.items():
+            print(f"{item_id}: {error}", file=sys.stderr)
+        return 1 if errors else 0
+
     if args.catalog_json:
         print(json.dumps(catalog_choice_records(), indent=2))
         return 0
@@ -2235,12 +2787,30 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.product:
         try:
-            firmware = ensure_catalog_firmware(
-                args.product,
-                force_download=args.refresh,
-                log=_print_log,
-            )
             item = get_catalog_item(args.product)
+            if args.version:
+                if args.refresh:
+                    raise FirmwareError("--refresh cannot be combined with --version; use --refresh-all first.")
+                selected_version = select_catalog_firmware_version(item, args.version)
+                firmware = selected_version.source
+                validate_catalog_firmware(item, firmware)
+                hardware_check = selected_version.hardware_check
+            else:
+                firmware = ensure_catalog_firmware(
+                    args.product,
+                    force_download=args.refresh,
+                    log=_print_log,
+                )
+                available_versions = catalog_firmware_versions(item)
+                selected_version = next(
+                    (
+                        version
+                        for version in available_versions
+                        if firmware_source_key(version.source) == firmware_source_key(firmware)
+                    ),
+                    None,
+                )
+                hardware_check = selected_version.hardware_check if selected_version else item.hardware_check
         except FirmwareError as error:
             print(f"Firmware error: {error}", file=sys.stderr)
             return 2
@@ -2257,7 +2827,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             verify_controller = False
         else:
             verify_controller = item.controller_check
-        hardware_check = item.hardware_check
         pre_flash_bootloader = item.pre_flash_bootloader
         post_flash_check = item.post_flash_check
     elif not args.firmware:
@@ -2309,4 +2878,3 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
