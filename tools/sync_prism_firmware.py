@@ -93,7 +93,20 @@ def prism_v1_hardware_check() -> dict:
 
 
 def prism_hardware_check_for_release(tag: str, release_title: str = "") -> dict:
-    return prism_v1_hardware_check()
+    check = prism_v1_hardware_check()
+    if re.fullmatch(r"v?1\.10(?:\.\d+)?", tag, flags=re.IGNORECASE) or re.fullmatch(
+        r"prism-v1-r\d+", tag, flags=re.IGNORECASE
+    ):
+        targets = list(check["accepted_targets"]) + list(check["known_mismatches"])
+        expected = next(target for target in targets if target["group"] == "prism-v11")
+        check.pop("accepted_targets", None)
+        check["expected_group"] = "prism-v11"
+        check["expected_label"] = expected["label"]
+        check["expect"] = list(expected["markers"])
+        check["known_mismatches"] = [
+            target for target in targets if target["group"] != "prism-v11"
+        ]
+    return check
 
 
 def auth_headers(accept: str = "application/vnd.github+json") -> dict[str, str]:

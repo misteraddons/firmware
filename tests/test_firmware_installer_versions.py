@@ -16,8 +16,8 @@ class DownloadResponse(io.BytesIO):
 
 
 class FirmwareInstallerVersionTests(unittest.TestCase):
-    def test_v111_semver_sorts_after_legacy_release_series(self):
-        self.assertGreater(installer.semver_key("v1.11"), installer.semver_key("prism-v1-r10"))
+    def test_v111_semver_sorts_after_v11010(self):
+        self.assertGreater(installer.semver_key("v1.11"), installer.semver_key("v1.10.10"))
 
     def test_prism_versions_include_bundled_history_with_latest_first(self):
         item = installer.get_catalog_item("reflex-prism")
@@ -28,23 +28,25 @@ class FirmwareInstallerVersionTests(unittest.TestCase):
         self.assertIn("v1.10.9", [version.version for version in versions])
         self.assertNotIn("current", [version.version for version in versions])
 
-    def test_legacy_prism_version_is_limited_to_v11_hardware(self):
+    def test_legacy_prism_versions_are_limited_to_v11_hardware(self):
         item = installer.get_catalog_item("reflex-prism")
 
-        version = installer.select_catalog_firmware_version(item, "v1.10.9")
+        for release in ("v1.10.9", "v1.10.10"):
+            with self.subTest(release=release):
+                version = installer.select_catalog_firmware_version(item, release)
 
-        self.assertIsNotNone(version.hardware_check)
-        assert version.hardware_check is not None
-        self.assertEqual("prism-v11", version.hardware_check["expected_group"])
-        self.assertEqual(["Hardware target: V1.05/V1.1 boards"], version.hardware_check["expect"])
-        mismatch_groups = {entry["group"] for entry in version.hardware_check["known_mismatches"]}
-        self.assertIn("prism-v12", mismatch_groups)
-        self.assertIn("prism-v13", mismatch_groups)
+                self.assertIsNotNone(version.hardware_check)
+                assert version.hardware_check is not None
+                self.assertEqual("prism-v11", version.hardware_check["expected_group"])
+                self.assertEqual(["Hardware target: V1.05/V1.1 boards"], version.hardware_check["expect"])
+                mismatch_groups = {entry["group"] for entry in version.hardware_check["known_mismatches"]}
+                self.assertIn("prism-v12", mismatch_groups)
+                self.assertIn("prism-v13", mismatch_groups)
 
-    def test_unified_prism_release_keeps_all_supported_v1_targets(self):
+    def test_v111_unified_release_keeps_all_supported_v1_targets(self):
         item = installer.get_catalog_item("reflex-prism")
 
-        version = installer.select_catalog_firmware_version(item, "prism-v1-r10")
+        version = installer.select_catalog_firmware_version(item, "v1.11")
 
         self.assertIsNotNone(version.hardware_check)
         assert version.hardware_check is not None
@@ -71,7 +73,7 @@ class FirmwareInstallerVersionTests(unittest.TestCase):
             url="https://example.invalid/prism_dac.uf2",
             file_name="prism_dac.uf2",
             source_label="test",
-            version="prism-v1-r10",
+            version="v1.10.10",
             immutable_version=True,
         )
 

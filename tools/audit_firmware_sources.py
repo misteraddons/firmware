@@ -165,6 +165,15 @@ CHECKS = [
         expected_family=RP2040_UF2_FAMILY_ID,
     ),
     SourceCheck(
+        "Reflex Prism v1.10.10",
+        "reflex-prism/v1.10.10/prism_dac.uf2",
+        "github_release_asset",
+        "misteraddons/Reflex-Prism",
+        release="v1.10.10",
+        asset_regex=r"^prism_dac\.uf2$",
+        expected_family=RP2040_UF2_FAMILY_ID,
+    ),
+    SourceCheck(
         "Reflex Prism latest alias",
         "reflex-prism/latest/prism_dac.uf2",
         "github_release_asset",

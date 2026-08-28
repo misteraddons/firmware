@@ -455,7 +455,7 @@ def builtin_catalog_items() -> List[CatalogItem]:
                     "file_name": "prism_dac.uf2",
                 },
             ),
-            local_paths=("reflex-prism/prism-v1-r10/prism_dac.uf2",),
+            local_paths=("reflex-prism/v1.10.10/prism_dac.uf2",),
             hardware_check=PRISM_HARDWARE_CHECK,
             pre_flash_bootloader=PRISM_PRE_FLASH_BOOTLOADER,
             post_flash_check=PRISM_POST_FLASH_CHECK,
