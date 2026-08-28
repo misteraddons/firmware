@@ -16,6 +16,9 @@ class DownloadResponse(io.BytesIO):
 
 
 class FirmwareInstallerVersionTests(unittest.TestCase):
+    def test_v111_semver_sorts_after_legacy_release_series(self):
+        self.assertGreater(installer.semver_key("v1.11"), installer.semver_key("prism-v1-r10"))
+
     def test_prism_versions_include_bundled_history_with_latest_first(self):
         item = installer.get_catalog_item("reflex-prism")
 

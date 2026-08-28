@@ -2,6 +2,8 @@ import json
 import unittest
 
 from tools.sync_prism_firmware import (
+    FLASH_NUKE_ASSET_NAME,
+    latest_asset_path,
     mirror_local_path,
     prism_hardware_check_for_release,
     update_catalog_text,
@@ -25,6 +27,10 @@ class PrismFirmwareSyncTests(unittest.TestCase):
         updated = json.loads(update_catalog_text(json.dumps(catalog), "prism-v1-r10"))
 
         self.assertEqual(updated["items"][1]["local_paths"], ["reflex-prism/prism-v1-r10/prism_dac.uf2"])
+        self.assertEqual(
+            updated["items"][1]["sources"][0]["path"],
+            "reflex-prism/latest/prism_dac.uf2",
+        )
 
     def test_prism_hardware_check_accepts_unified_v1_release(self):
         check = prism_hardware_check_for_release("prism-v1-r10", "Reflex Prism DAC V1 Release 10")
@@ -44,11 +50,14 @@ class PrismFirmwareSyncTests(unittest.TestCase):
             ]
         )
 
-        updated = update_checksums_text(text, "prism-v1-r10", "ccc").splitlines()
+        updated = update_checksums_text(text, "v1.11", "ccc", "ddd").splitlines()
 
         self.assertIn("aaa  reflex-prism/prism-v1-r9/prism_dac.uf2", updated)
         self.assertIn("bbb  reflex-ctrl/v0.7.12/controller.uf2", updated)
-        self.assertIn("ccc  reflex-prism/prism-v1-r10/prism_dac.uf2", updated)
+        self.assertIn("ccc  reflex-prism/v1.11/prism_dac.uf2", updated)
+        self.assertIn("ccc  reflex-prism/latest/prism_dac.uf2", updated)
+        self.assertIn("ddd  reflex-prism/v1.11/flash_nuke.uf2", updated)
+        self.assertIn("ddd  reflex-prism/latest/flash_nuke.uf2", updated)
 
     def test_update_readme_replaces_table_row_and_prism_note(self):
         readme = "\n".join(
@@ -61,13 +70,15 @@ class PrismFirmwareSyncTests(unittest.TestCase):
             ]
         )
 
-        updated = update_readme_text(readme, "prism-v1-r10")
+        updated = update_readme_text(readme, "v1.11")
 
         self.assertIn(
-            "| Reflex Prism | `reflex-prism/prism-v1-r10/prism_dac.uf2` | [`misteraddons/Reflex-Prism` prism-v1-r10](https://github.com/misteraddons/Reflex-Prism/releases/tag/prism-v1-r10) |",
+            "| Reflex Prism | `reflex-prism/latest/prism_dac.uf2` | [`misteraddons/Reflex-Prism` v1.11](https://github.com/misteraddons/Reflex-Prism/releases/tag/v1.11) |",
             updated,
         )
-        self.assertIn("The latest mirrored release is `prism-v1-r10`.", updated)
+        self.assertIn("| Reflex Prism Flash Nuke | `reflex-prism/latest/flash_nuke.uf2` |", updated)
+        self.assertIn("The latest mirrored release is `v1.11`.", updated)
+        self.assertIn(latest_asset_path(FLASH_NUKE_ASSET_NAME), updated)
         self.assertNotIn("Old note", updated)
 
 

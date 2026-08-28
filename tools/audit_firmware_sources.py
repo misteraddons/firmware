@@ -164,6 +164,23 @@ CHECKS = [
         catalog_item_id="reflex-prism",
         expected_family=RP2040_UF2_FAMILY_ID,
     ),
+    SourceCheck(
+        "Reflex Prism latest alias",
+        "reflex-prism/latest/prism_dac.uf2",
+        "github_release_asset",
+        "misteraddons/Reflex-Prism",
+        asset_regex=r"^prism_dac\.uf2$",
+        expected_family=RP2040_UF2_FAMILY_ID,
+    ),
+    SourceCheck(
+        "Reflex Prism Flash Nuke",
+        "reflex-prism/latest/flash_nuke.uf2",
+        "github_release_asset",
+        "OpenStickCommunity/GP2040-CE",
+        release="v0.7.12",
+        asset_regex=r"^flash_nuke\.uf2$",
+        expected_family=RP2040_UF2_FAMILY_ID,
+    ),
 ]
 
 
@@ -265,7 +282,7 @@ def ensure_list(value: object) -> list[dict]:
 def semver_key(value: str) -> tuple[int, ...]:
     match = re.fullmatch(r"prism-v1-r(\d+)", value.lower())
     if match:
-        return (1, int(match.group(1)))
+        return (0, 1, 10, max(0, int(match.group(1)) - 1), 1)
     numbers = [int(part) for part in re.findall(r"\d+", value)]
     return (0, *(numbers or [0]))
 

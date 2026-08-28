@@ -786,7 +786,10 @@ def ensure_list(value: object) -> List[dict]:
 def semver_key(value: str) -> Tuple[int, ...]:
     match = re.fullmatch(r"prism-v1-r(\d+)", value.lower())
     if match:
-        return (1, int(match.group(1)))
+        # Legacy release-series tags were not firmware versions. Keep their
+        # historical order, but rank them below the replacement v1.11+
+        # semantic firmware tags.
+        return (0, 1, 10, max(0, int(match.group(1)) - 1), 1)
     numbers = [int(part) for part in re.findall(r"\d+", value)]
     return (0, *(numbers or [0]))
 

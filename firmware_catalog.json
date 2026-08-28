@@ -291,11 +291,10 @@
       },
       "sources": [
         {
-          "type": "github_repo_latest_semver_file",
+          "type": "github_repo_file",
           "repo": "misteraddons/firmware",
           "ref": "main",
-          "directory": "reflex-prism",
-          "file_name": "prism_dac.uf2"
+          "path": "reflex-prism/latest/prism_dac.uf2"
         }
       ],
       "expected_uf2_family": "0xE48BFF56"
