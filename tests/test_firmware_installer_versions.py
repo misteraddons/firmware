@@ -24,7 +24,7 @@ class FirmwareInstallerVersionTests(unittest.TestCase):
 
         versions = installer.catalog_firmware_versions(item)
 
-        self.assertEqual("prism-v1-r10", versions[0].version)
+        self.assertEqual("v1.11", versions[0].version)
         self.assertIn("v1.10.9", [version.version for version in versions])
         self.assertNotIn("current", [version.version for version in versions])
 
