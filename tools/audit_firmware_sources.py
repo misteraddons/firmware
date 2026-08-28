@@ -160,6 +160,7 @@ CHECKS = [
         "",
         "github_release_asset",
         "misteraddons/Reflex-Prism",
+        release="catalog",
         asset_regex=r"^prism_dac\.uf2$",
         catalog_item_id="reflex-prism",
         expected_family=RP2040_UF2_FAMILY_ID,
@@ -178,7 +179,9 @@ CHECKS = [
         "reflex-prism/latest/prism_dac.uf2",
         "github_release_asset",
         "misteraddons/Reflex-Prism",
+        release="catalog",
         asset_regex=r"^prism_dac\.uf2$",
+        catalog_item_id="reflex-prism",
         expected_family=RP2040_UF2_FAMILY_ID,
     ),
     SourceCheck(
@@ -240,11 +243,25 @@ def hash_url(url: str) -> tuple[str, int]:
     return digest.hexdigest(), size
 
 
+def resolve_catalog_release_tag(item_id: str) -> str:
+    paths = catalog_local_paths_by_id().get(item_id, [])
+    if len(paths) != 1:
+        raise RuntimeError(f"expected one catalog path for release source {item_id}; got {len(paths)}")
+    match = re.fullmatch(r"reflex-prism/([^/]+)/prism_dac\.uf2", paths[0])
+    if not match:
+        raise RuntimeError(f"cannot derive Prism release tag from catalog path {paths[0]}")
+    return match.group(1)
+
+
 def resolve_release_asset(check: SourceCheck) -> SourceDigest:
-    if check.release == "latest":
+    release_name = (
+        resolve_catalog_release_tag(check.catalog_item_id)
+        if check.release == "catalog" else check.release
+    )
+    if release_name == "latest":
         url = f"https://api.github.com/repos/{check.repo}/releases/latest"
     else:
-        url = f"https://api.github.com/repos/{check.repo}/releases/tags/{check.release}"
+        url = f"https://api.github.com/repos/{check.repo}/releases/tags/{release_name}"
 
     release = request_json(url)
     assert isinstance(release, dict)
@@ -261,7 +278,7 @@ def resolve_release_asset(check: SourceCheck) -> SourceDigest:
         size = int(asset["size"]) if asset.get("size") is not None else None
     else:
         sha256, size = hash_url(asset["browser_download_url"])
-    return SourceDigest(f"{check.repo} {release.get('tag_name', check.release)} / {asset['name']}", sha256, size)
+    return SourceDigest(f"{check.repo} {release.get('tag_name', release_name)} / {asset['name']}", sha256, size)
 
 
 def resolve_repo_file(check: SourceCheck) -> SourceDigest:

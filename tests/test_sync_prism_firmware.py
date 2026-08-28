@@ -33,6 +33,13 @@ class PrismFirmwareSyncTests(unittest.TestCase):
             "reflex-prism/latest/prism_dac.uf2",
         )
 
+    def test_prerelease_is_labeled_as_release_candidate(self):
+        catalog = {"items": [{"id": "reflex-prism", "local_paths": []}]}
+        updated = json.loads(update_catalog_text(json.dumps(catalog), "v1.11", prerelease=True))
+
+        self.assertEqual(updated["items"][0]["label"], "Reflex Prism v1.11 Release Candidate")
+        self.assertEqual(updated["items"][0]["release_channel"], "prerelease")
+
     def test_v11010_hardware_check_is_limited_to_v11_boards(self):
         check = prism_hardware_check_for_release("v1.10.10", "Prism Firmware v1.10.10")
 
@@ -90,6 +97,18 @@ class PrismFirmwareSyncTests(unittest.TestCase):
         self.assertIn(latest_asset_path(FLASH_NUKE_ASSET_NAME), updated)
         self.assertIn(public_latest_url(FLASH_NUKE_ASSET_NAME), updated)
         self.assertNotIn("Old note", updated)
+
+    def test_update_readme_labels_prerelease(self):
+        readme = "\n".join(
+            [
+                "| Reflex Prism | old | old |",
+                "",
+                "Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. Old note.",
+            ]
+        )
+        updated = update_readme_text(readme, "v1.11", prerelease=True)
+        self.assertIn("release candidate download", updated)
+        self.assertIn("pending hardware testing", updated)
 
 
 if __name__ == "__main__":

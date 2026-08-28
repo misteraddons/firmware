@@ -28,6 +28,7 @@ USER_AGENT = "misteraddons-prism-firmware-sync/1.0"
 class ReleaseAsset:
     tag: str
     release_title: str
+    prerelease: bool
     name: str
     api_url: str
     digest: str
@@ -152,6 +153,7 @@ def resolve_release_asset(repo: str, tag: Optional[str], asset_name: str = ASSET
     return ReleaseAsset(
         tag=release_tag,
         release_title=str(release.get("name") or ""),
+        prerelease=bool(release.get("prerelease")),
         name=asset["name"],
         api_url=asset["url"],
         digest=asset.get("digest") or "",
@@ -196,10 +198,14 @@ def validate_prism_uf2(data: bytes, asset_name: str = ASSET_NAME) -> None:
     validate_uf2_stream(BytesIO(data), asset_name, RP2040_UF2_FAMILY_ID)
 
 
-def update_catalog_text(text: str, tag: str, release_title: str = "") -> str:
+def update_catalog_text(
+    text: str, tag: str, release_title: str = "", prerelease: bool = False
+) -> str:
     catalog = json.loads(text)
     for item in catalog.get("items", []):
         if item.get("id") == "reflex-prism":
+            item["label"] = f"Reflex Prism {tag} Release Candidate" if prerelease else "Reflex Prism"
+            item["release_channel"] = "prerelease" if prerelease else "stable"
             item["local_paths"] = [mirror_local_path(tag)]
             item["hardware_check"] = prism_hardware_check_for_release(tag, release_title)
             item["sources"] = [
@@ -228,11 +234,12 @@ def update_checksums_text(text: str, tag: str, sha256: str, flash_nuke_sha256: O
     return "\n".join(lines) + "\n"
 
 
-def update_readme_text(text: str, tag: str) -> str:
+def update_readme_text(text: str, tag: str, prerelease: bool = False) -> str:
     rel_path = latest_asset_path(ASSET_NAME)
+    channel_label = "release candidate download" if prerelease else "stable download"
     row = (
         f"| Reflex Prism | [`{rel_path}`]({rel_path}) | "
-        f"[stable download]({public_latest_url(ASSET_NAME)}) |"
+        f"[{channel_label}]({public_latest_url(ASSET_NAME)}) |"
     )
     text, row_count = re.subn(r"^\| Reflex Prism \| .* \| .* \|$", row, text, count=1, flags=re.MULTILINE)
     if row_count != 1:
@@ -249,9 +256,13 @@ def update_readme_text(text: str, tag: str) -> str:
     else:
         text = text.replace(row, row + "\n" + nuke_row, 1)
 
+    release_description = (
+        f"The mirrored release candidate is `{tag}` and remains pending hardware testing."
+        if prerelease else f"The latest mirrored release is `{tag}`."
+    )
     note = (
         "Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. "
-        f"The latest mirrored release is `{tag}`. Use `flash_nuke.uf2` only as a last-resort "
+        f"{release_description} Use `flash_nuke.uf2` only as a last-resort "
         "full erase; it removes settings and Custom EDID and must be followed by `prism_dac.uf2`. "
         f"Permanent downloads: {public_latest_url(ASSET_NAME)} and "
         f"{public_latest_url(FLASH_NUKE_ASSET_NAME)}."
@@ -268,6 +279,7 @@ def update_repository(
     data: bytes,
     flash_nuke_data: bytes,
     release_title: str = "",
+    prerelease: bool = False,
 ) -> Path:
     validate_prism_uf2(data, ASSET_NAME)
     validate_prism_uf2(flash_nuke_data, FLASH_NUKE_ASSET_NAME)
@@ -286,7 +298,9 @@ def update_repository(
 
     catalog_path = root / "firmware_catalog.json"
     catalog_path.write_text(
-        update_catalog_text(catalog_path.read_text(encoding="utf-8"), tag, release_title),
+        update_catalog_text(
+            catalog_path.read_text(encoding="utf-8"), tag, release_title, prerelease
+        ),
         encoding="utf-8",
     )
 
@@ -299,7 +313,10 @@ def update_repository(
     )
 
     readme_path = root / "README.md"
-    readme_path.write_text(update_readme_text(readme_path.read_text(encoding="utf-8"), tag), encoding="utf-8")
+    readme_path.write_text(
+        update_readme_text(readme_path.read_text(encoding="utf-8"), tag, prerelease),
+        encoding="utf-8",
+    )
     return target
 
 
@@ -310,6 +327,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--asset-path", type=Path, help="Use an already downloaded prism_dac.uf2 instead of GitHub.")
     parser.add_argument("--flash-nuke-path", type=Path,
                         help="Use an already downloaded flash_nuke.uf2 instead of GitHub.")
+    parser.add_argument("--prerelease", action="store_true",
+                        help="Mark an --asset-path mirror as a release candidate.")
     parser.add_argument("--root", type=Path, default=ROOT, help="Firmware mirror repo root.")
     parser.add_argument("--attempts", type=int, default=12, help="Download retry attempts for release-event races.")
     parser.add_argument("--retry-delay", type=float, default=10.0, help="Seconds between download retry attempts.")
@@ -328,6 +347,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         tag = args.tag
         data = args.asset_path.read_bytes()
         flash_nuke_data = args.flash_nuke_path.read_bytes()
+        release_prerelease = args.prerelease
     else:
         asset, data = fetch_release_asset(args.repo, args.tag, args.attempts, args.retry_delay, ASSET_NAME)
         try:
@@ -345,6 +365,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             raise RuntimeError("Prism firmware and Flash Nuke resolved from different releases")
         tag = asset.tag
         release_title = asset.release_title
+        release_prerelease = asset.prerelease
         digest = expected_sha256(asset)
         actual = hashlib.sha256(data).hexdigest()
         if digest and digest != actual:
@@ -364,7 +385,12 @@ def main(argv: Optional[list[str]] = None) -> int:
                 )
 
     target = update_repository(
-        root, tag, data, flash_nuke_data, release_title if not args.asset_path else ""
+        root,
+        tag,
+        data,
+        flash_nuke_data,
+        release_title if not args.asset_path else "",
+        release_prerelease,
     )
     print(f"Mirrored Reflex Prism {tag}: {target.relative_to(root).as_posix()}")
     return 0

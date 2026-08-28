@@ -199,7 +199,7 @@
     },
     {
       "id": "reflex-prism",
-      "label": "Reflex Prism",
+      "label": "Reflex Prism v1.11 Release Candidate",
       "install_method": "rp2040",
       "file_type": "uf2",
       "controller_check": false,
@@ -297,7 +297,8 @@
           "path": "reflex-prism/latest/prism_dac.uf2"
         }
       ],
-      "expected_uf2_family": "0xE48BFF56"
+      "expected_uf2_family": "0xE48BFF56",
+      "release_channel": "prerelease"
     }
   ]
 }
