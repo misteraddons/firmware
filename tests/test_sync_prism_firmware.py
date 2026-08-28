@@ -1,8 +1,11 @@
 import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from tools.sync_prism_firmware import (
     FLASH_NUKE_ASSET_NAME,
+    catalog_release_tag,
     latest_asset_path,
     mirror_local_path,
     public_latest_url,
@@ -14,6 +17,19 @@ from tools.sync_prism_firmware import (
 
 
 class PrismFirmwareSyncTests(unittest.TestCase):
+    def test_no_tag_sync_uses_catalog_pinned_prerelease(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "firmware_catalog.json").write_text(
+                json.dumps({"items": [{
+                    "id": "reflex-prism",
+                    "release_channel": "prerelease",
+                    "local_paths": ["reflex-prism/v1.11/prism_dac.uf2"],
+                }]}),
+                encoding="utf-8",
+            )
+            self.assertEqual(catalog_release_tag(root), "v1.11")
+
     def test_mirror_local_path_uses_existing_prism_layout(self):
         self.assertEqual(mirror_local_path("v1.10.10"), "reflex-prism/v1.10.10/prism_dac.uf2")
 

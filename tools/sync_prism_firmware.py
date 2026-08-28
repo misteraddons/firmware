@@ -51,6 +51,22 @@ def public_latest_url(asset_name: str) -> str:
     return f"https://raw.githubusercontent.com/{PUBLIC_REPO}/main/{latest_asset_path(asset_name)}"
 
 
+def catalog_release_tag(root: Path) -> str:
+    catalog_path = root / "firmware_catalog.json"
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    for item in catalog.get("items", []):
+        if item.get("id") != "reflex-prism":
+            continue
+        paths = item.get("local_paths", [])
+        if len(paths) != 1:
+            raise RuntimeError(f"expected one Reflex Prism catalog path; got {len(paths)}")
+        match = re.fullmatch(r"reflex-prism/([^/]+)/prism_dac\.uf2", paths[0])
+        if not match:
+            raise RuntimeError(f"cannot derive Reflex Prism release tag from {paths[0]}")
+        return match.group(1)
+    raise RuntimeError("reflex-prism entry not found in firmware_catalog.json")
+
+
 def prism_v1_hardware_check() -> dict:
     accepted_targets = [
         {
@@ -321,8 +337,8 @@ def update_repository(
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Mirror the latest Reflex Prism firmware release into this repo.")
-    parser.add_argument("--tag", help="Release tag to mirror. Defaults to the latest Reflex-Prism release.")
+    parser = argparse.ArgumentParser(description="Mirror a Reflex Prism firmware release into this repo.")
+    parser.add_argument("--tag", help="Release tag to mirror. Defaults to the catalog-pinned Prism release.")
     parser.add_argument("--repo", default=SOURCE_REPO, help=f"Source GitHub repo. Defaults to {SOURCE_REPO}.")
     parser.add_argument("--asset-path", type=Path, help="Use an already downloaded prism_dac.uf2 instead of GitHub.")
     parser.add_argument("--flash-nuke-path", type=Path,
@@ -349,7 +365,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         flash_nuke_data = args.flash_nuke_path.read_bytes()
         release_prerelease = args.prerelease
     else:
-        asset, data = fetch_release_asset(args.repo, args.tag, args.attempts, args.retry_delay, ASSET_NAME)
+        requested_tag = args.tag or catalog_release_tag(root)
+        if not args.tag:
+            print(f"Using catalog-pinned Reflex Prism release {requested_tag}")
+        asset, data = fetch_release_asset(args.repo, requested_tag, args.attempts, args.retry_delay, ASSET_NAME)
         try:
             flash_asset, flash_nuke_data = fetch_release_asset(
                 args.repo, asset.tag, args.attempts, args.retry_delay, FLASH_NUKE_ASSET_NAME
