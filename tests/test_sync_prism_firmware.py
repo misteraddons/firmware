@@ -5,6 +5,7 @@ from tools.sync_prism_firmware import (
     FLASH_NUKE_ASSET_NAME,
     latest_asset_path,
     mirror_local_path,
+    public_latest_url,
     prism_hardware_check_for_release,
     update_catalog_text,
     update_checksums_text,
@@ -73,12 +74,18 @@ class PrismFirmwareSyncTests(unittest.TestCase):
         updated = update_readme_text(readme, "v1.11")
 
         self.assertIn(
-            "| Reflex Prism | `reflex-prism/latest/prism_dac.uf2` | [`misteraddons/Reflex-Prism` v1.11](https://github.com/misteraddons/Reflex-Prism/releases/tag/v1.11) |",
+            "| Reflex Prism | [`reflex-prism/latest/prism_dac.uf2`](reflex-prism/latest/prism_dac.uf2) | "
+            f"[stable download]({public_latest_url('prism_dac.uf2')}) |",
             updated,
         )
-        self.assertIn("| Reflex Prism Flash Nuke | `reflex-prism/latest/flash_nuke.uf2` |", updated)
+        self.assertIn(
+            "| Reflex Prism Flash Nuke | "
+            "[`reflex-prism/latest/flash_nuke.uf2`](reflex-prism/latest/flash_nuke.uf2) |",
+            updated,
+        )
         self.assertIn("The latest mirrored release is `v1.11`.", updated)
         self.assertIn(latest_asset_path(FLASH_NUKE_ASSET_NAME), updated)
+        self.assertIn(public_latest_url(FLASH_NUKE_ASSET_NAME), updated)
         self.assertNotIn("Old note", updated)
 
 

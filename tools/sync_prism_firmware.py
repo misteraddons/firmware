@@ -16,6 +16,7 @@ from typing import Optional
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_REPO = "misteraddons/Reflex-Prism"
+PUBLIC_REPO = "misteraddons/firmware"
 ASSET_NAME = "prism_dac.uf2"
 FLASH_NUKE_ASSET_NAME = "flash_nuke.uf2"
 LATEST_DIRECTORY = "latest"
@@ -43,6 +44,10 @@ def mirror_asset_path(tag: str, asset_name: str) -> str:
 
 def latest_asset_path(asset_name: str) -> str:
     return f"reflex-prism/{LATEST_DIRECTORY}/{asset_name}"
+
+
+def public_latest_url(asset_name: str) -> str:
+    return f"https://raw.githubusercontent.com/{PUBLIC_REPO}/main/{latest_asset_path(asset_name)}"
 
 
 def prism_v1_hardware_check() -> dict:
@@ -212,18 +217,18 @@ def update_checksums_text(text: str, tag: str, sha256: str, flash_nuke_sha256: O
 
 def update_readme_text(text: str, tag: str) -> str:
     rel_path = latest_asset_path(ASSET_NAME)
-    release_url = f"https://github.com/{SOURCE_REPO}/releases/tag/{tag}"
     row = (
-        f"| Reflex Prism | `{rel_path}` | "
-        f"[`{SOURCE_REPO}` {tag}]({release_url}) |"
+        f"| Reflex Prism | [`{rel_path}`]({rel_path}) | "
+        f"[stable download]({public_latest_url(ASSET_NAME)}) |"
     )
     text, row_count = re.subn(r"^\| Reflex Prism \| .* \| .* \|$", row, text, count=1, flags=re.MULTILINE)
     if row_count != 1:
         raise RuntimeError("Reflex Prism README table row not found")
 
     nuke_row = (
-        f"| Reflex Prism Flash Nuke | `{latest_asset_path(FLASH_NUKE_ASSET_NAME)}` | "
-        f"[`{SOURCE_REPO}` {tag}]({release_url}) |"
+        f"| Reflex Prism Flash Nuke | "
+        f"[`{latest_asset_path(FLASH_NUKE_ASSET_NAME)}`]({latest_asset_path(FLASH_NUKE_ASSET_NAME)}) | "
+        f"[stable download]({public_latest_url(FLASH_NUKE_ASSET_NAME)}) |"
     )
     if re.search(r"^\| Reflex Prism Flash Nuke \|", text, flags=re.MULTILINE):
         text = re.sub(r"^\| Reflex Prism Flash Nuke \| .* \| .* \|$", nuke_row, text,
@@ -234,7 +239,9 @@ def update_readme_text(text: str, tag: str) -> str:
     note = (
         "Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. "
         f"The latest mirrored release is `{tag}`. Use `flash_nuke.uf2` only as a last-resort "
-        "full erase; it removes settings and Custom EDID and must be followed by `prism_dac.uf2`."
+        "full erase; it removes settings and Custom EDID and must be followed by `prism_dac.uf2`. "
+        f"Permanent downloads: {public_latest_url(ASSET_NAME)} and "
+        f"{public_latest_url(FLASH_NUKE_ASSET_NAME)}."
     )
     text, note_count = re.subn(r"^-?\s*Reflex Prism: .*$", note, text, count=1, flags=re.MULTILINE)
     if note_count != 1:

@@ -6,8 +6,8 @@ Firmware files and a small cross-platform installer/cache for MiSTer Addons prod
 
 | Project | Local file | Source |
 | --- | --- | --- |
-| Reflex Prism | `reflex-prism/latest/prism_dac.uf2` | [`misteraddons/Reflex-Prism` v1.11](https://github.com/misteraddons/Reflex-Prism/releases/tag/v1.11) |
-| Reflex Prism Flash Nuke | `reflex-prism/latest/flash_nuke.uf2` | [`misteraddons/Reflex-Prism` v1.11](https://github.com/misteraddons/Reflex-Prism/releases/tag/v1.11) |
+| Reflex Prism | [`reflex-prism/latest/prism_dac.uf2`](reflex-prism/latest/prism_dac.uf2) | [stable download](https://raw.githubusercontent.com/misteraddons/firmware/main/reflex-prism/latest/prism_dac.uf2) |
+| Reflex Prism Flash Nuke | [`reflex-prism/latest/flash_nuke.uf2`](reflex-prism/latest/flash_nuke.uf2) | [stable download](https://raw.githubusercontent.com/misteraddons/firmware/main/reflex-prism/latest/flash_nuke.uf2) |
 | Reflex Adapt Legacy / V1 | [`reflex-adapt-legacy/v2.01/`](reflex-adapt-legacy/v2.01/) | [`misteraddons/Reflex-Adapt-Legacy` v2.01](https://github.com/misteraddons/Reflex-Adapt-Legacy/releases/tag/v2.01) |
 | Reflex CTRL Genesis 6 | `reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlGenesis6.uf2` | [`OpenStickCommunity/GP2040-CE` v0.7.12](https://github.com/OpenStickCommunity/GP2040-CE/releases/download/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlGenesis6.uf2) |
 | Reflex CTRL NES | `reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlNES.uf2` | [`OpenStickCommunity/GP2040-CE` v0.7.12](https://github.com/OpenStickCommunity/GP2040-CE/releases/download/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlNES.uf2) |
@@ -66,7 +66,7 @@ python3 firmware_cli.py --firmware path/to/firmware.uf2
 
 Flashing is continuous by default: after one device completes, the CLI waits for the next `RPI-RP2` bootloader drive or configured serial bootloader device. Add `--once` only when you want to flash one device and exit.
 
-When `reflex-prism` is selected, the updater exposes every bundled or cached Prism version. The current `prism-v1-r10` release supports the listed Prism V1 hardware targets; legacy `v1.10.x` files are restricted to V1.05/V1.1 hardware. The updater watches for Prism USB CDC VID:PID `16D0:14F6`, verifies the connected hardware against the selected version, sends `bootloader`, flashes it, runs the Prism USB CDC sanity check, then waits for disconnect before arming for the next Prism. Catalog Prism firmware cannot start from an already-mounted BOOTSEL/manual `RPI-RP2` drive because the hardware target cannot be verified there; manually browsed custom UF2 files still work for recovery.
+When `reflex-prism` is selected, the updater exposes every bundled or cached Prism version. The current `v1.11` release supports the listed Prism V1 hardware targets; legacy `v1.10.x` files are restricted to V1.05/V1.1 hardware. The updater watches for Prism USB CDC VID:PID `16D0:14F6`, verifies the connected hardware against the selected version, sends `bootloader`, flashes it, runs the Prism USB CDC sanity check, then waits for disconnect before arming for the next Prism. Catalog Prism firmware cannot start from an already-mounted BOOTSEL/manual `RPI-RP2` drive because the hardware target cannot be verified there; manually browsed custom UF2 files still work for recovery.
 
 The original installer script also accepts the same headless arguments:
 
@@ -85,7 +85,7 @@ Build a Windows executable:
 ```
 
 The executable is a PyInstaller onedir build. It bundles the catalog, checksums, complete mirrored firmware history, and Windows GUI script, then uses `FirmwareInstaller.exe` itself for catalog, download, and flash subprocesses. Downloads are stored by product and version and validated before replacing a cached file. No system Python install is required for the built app.
-Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. The latest mirrored release is `v1.11`. Use `flash_nuke.uf2` only as a last-resort full erase; it removes settings and Custom EDID and must be followed by `prism_dac.uf2`.
+Reflex Prism: use `prism_dac.uf2` for the Prism firmware update. The latest mirrored release is `v1.11`. Use `flash_nuke.uf2` only as a last-resort full erase; it removes settings and Custom EDID and must be followed by `prism_dac.uf2`. Permanent downloads: https://raw.githubusercontent.com/misteraddons/firmware/main/reflex-prism/latest/prism_dac.uf2 and https://raw.githubusercontent.com/misteraddons/firmware/main/reflex-prism/latest/flash_nuke.uf2.
 
 Reflex Prism update checks use the static `reflex-prism/latest/prism_dac.uf2` mirror. Versioned directories remain available for rollback, and `tools/sync_prism_firmware.py` updates the versioned copy, static aliases, catalog, README, and checksums together. Downloads and local UF2 files are validated as structurally valid UF2 images and, for RP2040 entries, must carry UF2 family ID `0xE48BFF56`. Before flashing Prism catalog firmware, the installer opens the normal USB CDC VID:PID `16D0:14F6`, runs `dashboard config get`, and blocks the update unless `Hardware target` is one of the supported Reflex Prism DAC V1 targets; after flashing, it opens the same serial console and sanity-checks `status` plus `dashboard config get`. Source runs need `pyserial`; the Windows bundled installer includes it.
 
