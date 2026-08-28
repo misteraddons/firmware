@@ -204,7 +204,7 @@
       "file_type": "uf2",
       "controller_check": false,
       "local_paths": [
-        "reflex-prism/prism-v1-r10/prism_dac.uf2"
+        "reflex-prism/v1.11/prism_dac.uf2"
       ],
       "hardware_check": {
         "type": "serial_hardware_check",
