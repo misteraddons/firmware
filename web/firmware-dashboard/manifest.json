@@ -1,0 +1,555 @@
+{
+  "schema": 1,
+  "generatedFrom": "firmware_catalog.json + checksums.sha256 + firmware_installer.py",
+  "privacy": {
+    "uploads": false,
+    "analytics": false,
+    "storage": "local-only"
+  },
+  "transports": {
+    "serial": "supported",
+    "hid": "permission-only",
+    "picoboot": "investigated-disabled"
+  },
+  "products": [
+    {
+      "id": "mistercade-v2",
+      "label": "MiSTercade V2",
+      "installMethod": "rp2040",
+      "notes": "",
+      "usbFilters": [],
+      "identity": {
+        "supported": false
+      },
+      "releases": [],
+      "backups": {
+        "settings": {
+          "supported": false,
+          "reason": "No approved browser settings protocol."
+        },
+        "firmware": {
+          "supported": false,
+          "reason": "Application firmware readback is unavailable."
+        },
+        "fullFlash": {
+          "supported": false,
+          "reason": "PICOBOOT readback is not hardware validated."
+        }
+      },
+      "directFlash": {
+        "supported": false,
+        "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      }
+    },
+    {
+      "id": "mistercade-v1-2025",
+      "label": "MiSTercade V1 2025 (32u4 package)",
+      "installMethod": "cache_only",
+      "notes": "32u4 firmware package; cache/download only in this RP2040 installer.",
+      "usbFilters": [],
+      "identity": {
+        "supported": false
+      },
+      "releases": [],
+      "backups": {
+        "settings": {
+          "supported": false,
+          "reason": "No approved browser settings protocol."
+        },
+        "firmware": {
+          "supported": false,
+          "reason": "Application firmware readback is unavailable."
+        },
+        "fullFlash": {
+          "supported": false,
+          "reason": "PICOBOOT readback is not hardware validated."
+        }
+      },
+      "directFlash": {
+        "supported": false,
+        "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      }
+    },
+    {
+      "id": "reflex-adapt-legacy",
+      "label": "Reflex Adapt Legacy / V1 (32u4 package)",
+      "installMethod": "cache_only",
+      "notes": "32u4 firmware package; cache/download only in this RP2040 installer.",
+      "usbFilters": [],
+      "identity": {
+        "supported": false
+      },
+      "releases": [],
+      "backups": {
+        "settings": {
+          "supported": false,
+          "reason": "No approved browser settings protocol."
+        },
+        "firmware": {
+          "supported": false,
+          "reason": "Application firmware readback is unavailable."
+        },
+        "fullFlash": {
+          "supported": false,
+          "reason": "PICOBOOT readback is not hardware validated."
+        }
+      },
+      "directFlash": {
+        "supported": false,
+        "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      }
+    },
+    {
+      "id": "reflex-encode-v1",
+      "label": "Reflex Encode V1.2",
+      "installMethod": "rp2040",
+      "notes": "",
+      "usbFilters": [],
+      "identity": {
+        "supported": false
+      },
+      "releases": [],
+      "backups": {
+        "settings": {
+          "supported": false,
+          "reason": "No approved browser settings protocol."
+        },
+        "firmware": {
+          "supported": false,
+          "reason": "Application firmware readback is unavailable."
+        },
+        "fullFlash": {
+          "supported": false,
+          "reason": "PICOBOOT readback is not hardware validated."
+        }
+      },
+      "directFlash": {
+        "supported": false,
+        "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      }
+    },
+    {
+      "id": "reflex-encode-v2",
+      "label": "Reflex Encode V2.0",
+      "installMethod": "rp2040",
+      "notes": "",
+      "usbFilters": [],
+      "identity": {
+        "supported": false
+      },
+      "releases": [],
+      "backups": {
+        "settings": {
+          "supported": false,
+          "reason": "No approved browser settings protocol."
+        },
+        "firmware": {
+          "supported": false,
+          "reason": "Application firmware readback is unavailable."
+        },
+        "fullFlash": {
+          "supported": false,
+          "reason": "PICOBOOT readback is not hardware validated."
+        }
+      },
+      "directFlash": {
+        "supported": false,
+        "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      }
+    },
+    {
+      "id": "reflex-ctrl-genesis6",
+      "label": "Reflex CTRL Genesis 6",
+      "installMethod": "rp2040",
+      "notes": "",
+      "usbFilters": [],
+      "identity": {
+        "supported": false
+      },
+      "releases": [],
+      "backups": {
+        "settings": {
+          "supported": false,
+          "reason": "No approved browser settings protocol."
+        },
+        "firmware": {
+          "supported": false,
+          "reason": "Application firmware readback is unavailable."
+        },
+        "fullFlash": {
+          "supported": false,
+          "reason": "PICOBOOT readback is not hardware validated."
+        }
+      },
+      "directFlash": {
+        "supported": false,
+        "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      }
+    },
+    {
+      "id": "reflex-ctrl-nes",
+      "label": "Reflex CTRL NES",
+      "installMethod": "rp2040",
+      "notes": "",
+      "usbFilters": [],
+      "identity": {
+        "supported": false
+      },
+      "releases": [],
+      "backups": {
+        "settings": {
+          "supported": false,
+          "reason": "No approved browser settings protocol."
+        },
+        "firmware": {
+          "supported": false,
+          "reason": "Application firmware readback is unavailable."
+        },
+        "fullFlash": {
+          "supported": false,
+          "reason": "PICOBOOT readback is not hardware validated."
+        }
+      },
+      "directFlash": {
+        "supported": false,
+        "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      }
+    },
+    {
+      "id": "reflex-ctrl-snes",
+      "label": "Reflex CTRL SNES",
+      "installMethod": "rp2040",
+      "notes": "",
+      "usbFilters": [],
+      "identity": {
+        "supported": false
+      },
+      "releases": [],
+      "backups": {
+        "settings": {
+          "supported": false,
+          "reason": "No approved browser settings protocol."
+        },
+        "firmware": {
+          "supported": false,
+          "reason": "Application firmware readback is unavailable."
+        },
+        "fullFlash": {
+          "supported": false,
+          "reason": "PICOBOOT readback is not hardware validated."
+        }
+      },
+      "directFlash": {
+        "supported": false,
+        "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      }
+    },
+    {
+      "id": "reflex-ctrl-saturn",
+      "label": "Reflex CTRL Saturn",
+      "installMethod": "rp2040",
+      "notes": "",
+      "usbFilters": [],
+      "identity": {
+        "supported": false
+      },
+      "releases": [],
+      "backups": {
+        "settings": {
+          "supported": false,
+          "reason": "No approved browser settings protocol."
+        },
+        "firmware": {
+          "supported": false,
+          "reason": "Application firmware readback is unavailable."
+        },
+        "fullFlash": {
+          "supported": false,
+          "reason": "PICOBOOT readback is not hardware validated."
+        }
+      },
+      "directFlash": {
+        "supported": false,
+        "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      }
+    },
+    {
+      "id": "reflex-ctrl-vb",
+      "label": "Reflex CTRL Virtual Boy",
+      "installMethod": "rp2040",
+      "notes": "",
+      "usbFilters": [],
+      "identity": {
+        "supported": false
+      },
+      "releases": [],
+      "backups": {
+        "settings": {
+          "supported": false,
+          "reason": "No approved browser settings protocol."
+        },
+        "firmware": {
+          "supported": false,
+          "reason": "Application firmware readback is unavailable."
+        },
+        "fullFlash": {
+          "supported": false,
+          "reason": "PICOBOOT readback is not hardware validated."
+        }
+      },
+      "directFlash": {
+        "supported": false,
+        "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      }
+    },
+    {
+      "id": "reflex-prism",
+      "label": "Reflex Prism",
+      "installMethod": "rp2040",
+      "notes": "",
+      "usbFilters": [
+        {
+          "vendorId": 5840,
+          "productId": 5366
+        }
+      ],
+      "identity": {
+        "supported": true,
+        "transport": "serial",
+        "command": "status\r\ndashboard config get",
+        "timeoutMs": 8000,
+        "markers": [
+          "=== Status ===",
+          "[DASHBOARD] CONFIG BEGIN",
+          "[DASHBOARD] CONFIG END"
+        ],
+        "versionPatterns": [
+          "Firmware Version:\\s*v?([^\\s]+)",
+          "Firmware:\\s*v?([^\\s]+)"
+        ],
+        "uniqueIdPatterns": [
+          "Board ID:\\s*([0-9A-F]{16})"
+        ]
+      },
+      "releases": [
+        {
+          "version": "1.11",
+          "channel": "stable",
+          "hardwareGroups": [
+            "prism-v11",
+            "prism-v12",
+            "prism-v13"
+          ],
+          "fileName": "prism_dac.uf2",
+          "sha256": "497df0e701aedccf510f56a8e13e0e32985fe029a459d8aa364913015b77d2c7",
+          "bytes": 542208,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/aa5093cc9920d1ebd0670c196f2d75725fc9f88b/reflex-prism/v1.11/prism_dac.uf2",
+          "releaseNotes": "Approved Reflex Prism stable firmware from the canonical firmware catalog."
+        },
+        {
+          "version": "1.10.10",
+          "channel": "stable",
+          "hardwareGroups": [
+            "prism-v11"
+          ],
+          "fileName": "prism_dac.uf2",
+          "sha256": "8be99b04f84ca1f467f1a1826af81b84d55e500ee767f7718c5e255ebd897dd1",
+          "bytes": 414208,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/6a11388cd17375f7b2b16b847808e7ea96cd85f4/reflex-prism/v1.10.10/prism_dac.uf2",
+          "releaseNotes": "Approved Reflex Prism stable firmware from the canonical firmware catalog."
+        },
+        {
+          "version": "1.10.9",
+          "channel": "stable",
+          "hardwareGroups": [
+            "prism-v11"
+          ],
+          "fileName": "prism_dac.uf2",
+          "sha256": "d3c54b36b62806446d31429415ab6fec0af63ad919cca0ea51ecec3f75aba420",
+          "bytes": 414208,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/f822934c8e11b64e193be21a00c5432871ed0951/reflex-prism/v1.10.9/prism_dac.uf2",
+          "releaseNotes": "Approved Reflex Prism stable firmware from the canonical firmware catalog."
+        },
+        {
+          "version": "1.10.8",
+          "channel": "stable",
+          "hardwareGroups": [
+            "prism-v11"
+          ],
+          "fileName": "prism_dac.uf2",
+          "sha256": "472e425d8206744cb8a2201c8d62923f330ad5e3844e76d2a4e1a555866eb3d3",
+          "bytes": 412672,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/64e3b53ae6ce4df268b90cacfe27523daed2a247/reflex-prism/v1.10.8/prism_dac.uf2",
+          "releaseNotes": "Approved Reflex Prism stable firmware from the canonical firmware catalog."
+        },
+        {
+          "version": "1.10.7",
+          "channel": "stable",
+          "hardwareGroups": [
+            "prism-v11"
+          ],
+          "fileName": "prism_dac.uf2",
+          "sha256": "0c6788e7674d587c6781527465da792ed43d4f9612d23769930ad310542e1536",
+          "bytes": 408064,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/2d732090050bd0d42ebbc7924450c0278798d527/reflex-prism/v1.10.7/prism_dac.uf2",
+          "releaseNotes": "Approved Reflex Prism stable firmware from the canonical firmware catalog."
+        },
+        {
+          "version": "1.10.6",
+          "channel": "stable",
+          "hardwareGroups": [
+            "prism-v11"
+          ],
+          "fileName": "prism_dac.uf2",
+          "sha256": "7155e6347f480553885923b1dfbeba93229bc060d748ddf83b91ef857cb0b56c",
+          "bytes": 407040,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/2d732090050bd0d42ebbc7924450c0278798d527/reflex-prism/v1.10.6/prism_dac.uf2",
+          "releaseNotes": "Approved Reflex Prism stable firmware from the canonical firmware catalog."
+        },
+        {
+          "version": "1.10.5",
+          "channel": "stable",
+          "hardwareGroups": [
+            "prism-v11"
+          ],
+          "fileName": "prism_dac.uf2",
+          "sha256": "89cd2b7a2ca4e975c1e89f0fbf7aedb56bbd305315f7ec4a24e17d39637a1955",
+          "bytes": 397824,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/8de4123dc17f9a7f47c37d8c23b75015f8d5e6d9/reflex-prism/v1.10.5/prism_dac.uf2",
+          "releaseNotes": "Approved Reflex Prism stable firmware from the canonical firmware catalog."
+        },
+        {
+          "version": "1.10.4",
+          "channel": "stable",
+          "hardwareGroups": [
+            "prism-v11"
+          ],
+          "fileName": "prism_dac.uf2",
+          "sha256": "5d89a60a6ca6aaa74bf5570cdd7660f4a2200ccc36c0148cf545e6acffe5379a",
+          "bytes": 382976,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/7a956f1b226400cc51e9c6961af2838e3ee2e44b/reflex-prism/v1.10.4/prism_dac.uf2",
+          "releaseNotes": "Approved Reflex Prism stable firmware from the canonical firmware catalog."
+        },
+        {
+          "version": "1.10.3",
+          "channel": "stable",
+          "hardwareGroups": [
+            "prism-v11"
+          ],
+          "fileName": "prism_dac.uf2",
+          "sha256": "6e06c8dc93e713af8900c0f1f526335b93baab72a9d4ac156ca7e2340e48095e",
+          "bytes": 381952,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/eaac20d66676395b4554ff5805996d28665844ee/reflex-prism/v1.10.3/prism_dac.uf2",
+          "releaseNotes": "Approved Reflex Prism stable firmware from the canonical firmware catalog."
+        },
+        {
+          "version": "1.10.1",
+          "channel": "stable",
+          "hardwareGroups": [
+            "prism-v11"
+          ],
+          "fileName": "prism_dac.uf2",
+          "sha256": "e4cb7caf2f3146e4a36de168dcca500b534980f4f816c1fd853f2a6077a0ceec",
+          "bytes": 415232,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/46f68d9b8956eb9db823daa657d7d09c8855602c/reflex-prism/v1.10.1/prism_dac.uf2",
+          "releaseNotes": "Approved Reflex Prism stable firmware from the canonical firmware catalog."
+        }
+      ],
+      "backups": {
+        "settings": {
+          "supported": true,
+          "transport": "serial",
+          "command": "dashboard config get",
+          "expect": [
+            "[DASHBOARD] CONFIG BEGIN",
+            "[DASHBOARD] CONFIG END"
+          ],
+          "timeoutMs": 8000,
+          "sensitivity": "local-settings"
+        },
+        "firmware": {
+          "supported": false,
+          "reason": "No application firmware readback command."
+        },
+        "fullFlash": {
+          "supported": false,
+          "reason": "PICOBOOT readback and original-board restore are not hardware validated."
+        }
+      },
+      "directFlash": {
+        "supported": false,
+        "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      },
+      "hardwareCheck": {
+        "acceptedTargets": [
+          {
+            "group": "prism-v11",
+            "label": "Prism V1.05/V1.1",
+            "markers": [
+              "Hardware target: V1.05/V1.1 boards"
+            ]
+          },
+          {
+            "group": "prism-v12",
+            "label": "Prism V1.2",
+            "markers": [
+              "Hardware target: V1.2 boards"
+            ]
+          },
+          {
+            "group": "prism-v13",
+            "label": "Prism V1.3 Smart HD15",
+            "markers": [
+              "Hardware target: V1.3 Smart HD15 boards"
+            ]
+          }
+        ],
+        "knownMismatches": [
+          {
+            "group": "prism-pro",
+            "label": "Prism Pro",
+            "markers": [
+              "Hardware target: Pro boards"
+            ]
+          }
+        ]
+      },
+      "postFlashCheck": {
+        "transport": "serial",
+        "commands": [
+          {
+            "command": "status",
+            "expect": [
+              "=== Status ===",
+              "EDID Route",
+              "Sync Mode"
+            ]
+          },
+          {
+            "command": "dashboard config get",
+            "expect": [
+              "[DASHBOARD] CONFIG BEGIN",
+              "[DASHBOARD] CONFIG END"
+            ]
+          }
+        ],
+        "commandTimeoutMs": 8000
+      },
+      "flashPolicy": {
+        "expectedFamily": 3834380118,
+        "allowedFlashRanges": [
+          {
+            "start": 268435456,
+            "end": 270532608
+          }
+        ],
+        "protectedFlashRanges": [
+          {
+            "start": 270467072,
+            "end": 270532608
+          }
+        ]
+      }
+    }
+  ]
+}
