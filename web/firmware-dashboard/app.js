@@ -1,4 +1,4 @@
-import { DashboardError, UpdateSession, associateBootloaderTransition, compareVersions, identifyClassicSerialProduct, identifyProduct, identifyWebHidProduct, matchCandidates, selectRelease, validateDownload } from './core.js';
+import { DashboardError, UpdateSession, associateBootloaderTransition, compareVersions, identifyAdaptManagement, identifyClassicSerialProduct, identifyProduct, identifyWebHidProduct, matchCandidates, selectRelease, validateDownload } from './core.js';
 
 const state = { manifest: null, port: null, reader: null, hidDevice: null, bootloader: null, identity: null, release: null, image: null, session: new UpdateSession() };
 const $ = selector => document.querySelector(selector);
@@ -7,6 +7,30 @@ const log = (message, tone = '') => {
   $('#activity').prepend(item);
 };
 const setStatus = (text, tone = '') => { $('#status').textContent = text; $('#status').dataset.tone = tone; };
+
+async function beginConnection() {
+  // Do not leave a previously verified unit active after a cancelled/bad probe.
+  if (state.reader) await state.reader.cancel().catch(() => {});
+  if (state.port) await state.port.close().catch(() => {});
+  if (state.hidDevice?.opened) await state.hidDevice.close().catch(() => {});
+  state.port = null; state.hidDevice = null; state.identity = null; state.bootloader = null;
+  if (state.session.phase !== 'flashing') {
+    state.session.reset(); state.release = null; state.image = null;
+  }
+  for (const id of ['download', 'confirm', 'verify']) $('#' + id).disabled = true;
+  renderIdentity();
+}
+
+function acceptIdentity(identity) {
+  if (state.session.phase === 'flashing') {
+    const approved = state.session.identity;
+    if (identity.uniqueId !== approved.uniqueId || identity.product.id !== approved.product.id ||
+        (approved.target && approved.target !== identity.target)) throw new DashboardError('wrong-device', 'Reconnect the approved physical unit and hardware target.');
+    $('#verify').disabled = false;
+  } else state.session.connected(identity);
+  identity.product.connectedHardwareGroup = identity.hardware.group;
+  state.identity = identity;
+}
 
 function renderCapabilities() {
   const hasApprovedRelease = !!(state.identity?.product.releases || []).length;
@@ -61,6 +85,7 @@ async function waitForSerialDisconnect(port, timeoutMs = 8000) {
 
 async function connectSerial() {
   if (!navigator.serial) throw new DashboardError('unsupported', 'Web Serial requires desktop Chrome or Edge over HTTPS.');
+  await beginConnection();
   const filters = state.manifest.products.flatMap(product => product.usbFilters || []).map(filter => ({ usbVendorId: Number(filter.vendorId), usbProductId: Number(filter.productId) }));
   let port;
   try { port = await navigator.serial.requestPort({ filters }); }
@@ -68,13 +93,25 @@ async function connectSerial() {
   const info = port.getInfo();
   await port.open({ baudRate: 115200, bufferSize: 65536 }); state.port = port;
   const candidates = matchCandidates(state.manifest.products, { vendorId: info.usbVendorId, productId: info.usbProductId });
+  const modernIdentity = candidates.find(item => item.identity?.identityV2Command === 'IDENTITY2');
+  if (modernIdentity) {
+    const responseV2 = await readSerialResponse(port, modernIdentity.identity.identityV2Command, 2500);
+    if (!/^ERR:UNKNOWN_CMD\s*$/i.test(responseV2.trim())) {
+      const management = ReflexIdentity.parseSerial(responseV2);
+      const identity = identifyAdaptManagement(state.manifest.products, management,
+        { vendorId: info.usbVendorId, productId: info.usbProductId });
+      acceptIdentity(identity);
+      renderIdentity(); renderUpdateAvailability();
+      setStatus('Product, build target and unit ID verified in one serial response.', 'ok');
+      return;
+    }
+  }
   const classic = candidates.find(item => item.identity?.protocol === 'classic2usb-management-v1');
   if (classic) {
     const infoResponse = await readSerialResponse(port, classic.identity.infoCommand, 2500);
     const identityResponse = await readSerialResponse(port, classic.identity.identityCommand, 2500);
     const identity = identifyClassicSerialProduct(state.manifest.products, { usbInfo: { vendorId: info.usbVendorId, productId: info.usbProductId }, infoResponse, identityResponse });
-    identity.product.connectedHardwareGroup = identity.hardware.group;
-    state.identity = identity; state.session.connected(identity);
+    acceptIdentity(identity);
     renderIdentity(); renderUpdateAvailability();
     if (identity.identitySupport === 'verified') {
       setStatus('Product recognized and unique identity verified over one serial session.', 'ok');
@@ -89,14 +126,14 @@ async function connectSerial() {
   if (!product?.identity?.command) throw new DashboardError('ambiguous-device', 'The selected USB ID has no approved browser identity query.');
   const response = await readSerialResponse(port, product.identity.command, product.identity.timeoutMs || 8000);
   const identity = identifyProduct(state.manifest.products, { usbInfo: { vendorId: info.usbVendorId, productId: info.usbProductId }, response });
-  identity.product.connectedHardwareGroup = identity.hardware.group;
-  state.identity = identity; state.session.connected(identity);
+  acceptIdentity(identity);
   renderIdentity(); renderUpdateAvailability(); setStatus('Device identified. Check for a compatible release.', 'ok');
   log(`Identified ${identity.product.label} / ${identity.hardware.label}.`, 'ok');
 }
 
 async function connectHid() {
   if (!navigator.hid) throw new DashboardError('unsupported', 'WebHID requires desktop Chrome or Edge over HTTPS.');
+  await beginConnection();
   const filters = state.manifest.products
     .filter(product => product.identity?.hidProductIds?.length)
     .flatMap(product => product.usbFilters || [])
@@ -107,11 +144,20 @@ async function connectHid() {
   if (!selected) throw new DashboardError('permission-cancelled', 'Device permission was cancelled.');
   try {
     if (!selected.opened) await selected.open();
+    const management = await ReflexIdentity.readHid(selected);
+    if (management) {
+      const identity = identifyAdaptManagement(state.manifest.products, management,
+        { vendorId: selected.vendorId, productId: selected.productId });
+      acceptIdentity(identity); state.hidDevice = selected;
+      renderIdentity(); renderUpdateAvailability();
+      setStatus('Product, build target and unit ID verified over WebHID.', 'ok');
+      return;
+    }
     const report = await selected.receiveFeatureReport(0xe0);
     const identity = identifyWebHidProduct(state.manifest.products, {
       usbInfo: { vendorId: selected.vendorId, productId: selected.productId }, report: new Uint8Array(report.buffer),
     });
-    state.hidDevice = selected; state.identity = identity; state.session.connected(identity);
+    acceptIdentity(identity); state.hidDevice = selected;
     renderIdentity(); renderUpdateAvailability(); setStatus('Product recognized over WebHID. Select its serial interface to verify unique identity.', 'warn');
     log(`Recognized ${identity.product.label} / ${identity.hardware.label}; WebHID identity is product-family only.`, 'warn');
   } catch (error) {
@@ -140,11 +186,11 @@ async function connectBootloader() {
 function renderIdentity() {
   const identity = state.identity;
   $('#product').textContent = identity?.product.label || 'Not connected';
-  $('#hardware').textContent = identity?.hardware.label || 'Unknown';
+  $('#hardware').textContent = identity?.target || identity?.hardware.label || 'Unknown';
   $('#product-status').textContent = identity ? 'Recognized' : 'Not recognized';
   $('#identity-status').textContent = identity?.uniqueId ? 'Verified' : identity?.identitySupport === 'unsupported' ? 'Installed firmware lacks IDENTITY support' : identity ? 'Not verified' : 'Not checked';
   $('#unique-id').textContent = identity?.uniqueId || 'Unavailable';
-  $('#installed').textContent = identity?.version || 'Unknown (bcdDevice ignored)';
+  $('#installed').textContent = identity ? `${identity.version || 'Unknown'}${identity.build ? ' / ' + identity.build : ''}` : 'Unknown (bcdDevice ignored)';
   $('#backup-settings').disabled = !identity?.product.backups?.settings?.supported;
   $('#check-update').disabled = !identity;
   $('#show-manual').disabled = !identity;
@@ -209,16 +255,39 @@ function confirmUpdate() {
 }
 
 async function verifyAfterFlash() {
-  if (!state.port) throw new DashboardError('disconnect', 'Reconnect the same device over serial first.');
-  const response = await readSerialResponse(state.port, state.identity.product.identity.command, 8000);
-  const info = state.port.getInfo();
-  const identity = identifyProduct(state.manifest.products, { usbInfo: { vendorId: info.usbVendorId, productId: info.usbProductId }, response });
+  if (!state.identity) throw new DashboardError('disconnect', 'Reconnect the same device first.');
+  let identity;
+  if (state.identity.management?.schema === 2) {
+    let record, usbInfo;
+    if (state.hidDevice) {
+      record = await ReflexIdentity.readHid(state.hidDevice);
+      usbInfo = {vendorId:state.hidDevice.vendorId, productId:state.hidDevice.productId};
+    } else if (state.port) {
+      record = ReflexIdentity.parseSerial(await readSerialResponse(state.port, 'IDENTITY2', 2500));
+      const info = state.port.getInfo(); usbInfo = {vendorId:info.usbVendorId, productId:info.usbProductId};
+    }
+    if (!record) throw new DashboardError('missing-identity', 'Identity support disappeared after update.');
+    identity = identifyAdaptManagement(state.manifest.products, record, usbInfo);
+  } else {
+    if (!state.port) throw new DashboardError('disconnect', 'Reconnect over serial first.');
+    const info = state.port.getInfo(); const usbInfo = {vendorId:info.usbVendorId, productId:info.usbProductId};
+    const rules = state.identity.product.identity;
+    if (rules.protocol === 'classic2usb-management-v1') {
+      const infoResponse = await readSerialResponse(state.port, rules.infoCommand, 2500);
+      const identityResponse = await readSerialResponse(state.port, rules.identityCommand, 2500);
+      identity = identifyClassicSerialProduct(state.manifest.products, {usbInfo, infoResponse, identityResponse});
+    } else {
+      const response = await readSerialResponse(state.port, rules.command, 8000);
+      identity = identifyProduct(state.manifest.products, {usbInfo, response});
+    }
+  }
   const health = state.identity.product.postFlashCheck;
-  for (const command of health.commands || []) {
+  for (const command of health?.commands || []) {
+    if (!state.port) throw new DashboardError('health-check', 'This product requires a serial health check.');
     const output = await readSerialResponse(state.port, command.command, health.commandTimeoutMs || 8000);
     if (!(command.expect || []).every(marker => output.includes(marker))) throw new DashboardError('health-check', `Health command failed: ${command.command}`);
   }
-  state.session.verify(identity, true); setStatus('Verified: same device, target version, and health checks passed.', 'ok');
+  state.session.verify(identity, true); setStatus('Verified: same device and target version; configured health checks passed.', 'ok');
 }
 
 function safeName(value) { return String(value || 'unknown').replace(/[^a-z0-9._-]/gi, '_'); }

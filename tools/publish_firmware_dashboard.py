@@ -12,7 +12,7 @@ try:
 except ImportError:  # Direct script execution.
     from export_firmware_dashboard import ROOT, WEB_ROOT, build_manifest
 
-FILES = ("index.html", "styles.css", "core.js", "app.js", "manifest.json")
+FILES = ("index.html", "styles.css", "core.js", "app.js", "management-identity.js", "manifest.json")
 HEADER_BLOCK = """
 
 /tools/firmware/*

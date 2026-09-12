@@ -1,3 +1,20 @@
+import './management-identity.js';
+
+export function identifyAdaptManagement(products, management, usbInfo) {
+  const candidates = matchCandidates(products, usbInfo).filter(product =>
+    product.identity?.product === management.product);
+  if (candidates.length !== 1) throw new DashboardError('ambiguous-device', 'Identity does not match exactly one approved product.');
+  const product = candidates[0], rules = product.identity;
+  if (management.mcu !== rules.mcu || management.vid !== rules.baseVid || management.pid !== rules.basePid ||
+      !(rules.hardwareTargets || []).includes(management.target)) {
+    throw new DashboardError('incompatible-hardware', 'Reported build target is not approved for this product.');
+  }
+  const targets = product.hardwareCheck?.acceptedTargets || [];
+  if (targets.length !== 1) throw new DashboardError('unknown-hardware', 'Ambiguous hardware compatibility group.');
+  return { product, hardware: targets[0], uniqueId: management.uid, version: management.version,
+    identitySupport: 'verified', management, build: management.build, target: management.target };
+}
+
 export const UF2 = Object.freeze({
   blockSize: 512,
   magicStart0: 0x0a324655,
@@ -249,6 +266,8 @@ export class UpdateSession {
   disconnected() { if (this.phase === 'flashing') throw new DashboardError('disconnect', 'Device disconnected while updating.'); this.phase = 'disconnected'; }
   verify(identity, healthOk) {
     if (!this.identity || identity.uniqueId !== this.identity.uniqueId) throw new DashboardError('wrong-device', 'Reconnected device is not the device that was approved.');
+    if (this.identity.management?.schema === 2 && ['product', 'target', 'mcu', 'vid', 'pid'].some(key =>
+        identity.management?.[key] !== this.identity.management[key])) throw new DashboardError('wrong-device', 'Reconnected product/hardware target changed.');
     if (compareVersions(identity.version || '', this.release.version) !== 0) throw new DashboardError('wrong-version', 'Post-flash firmware version does not match the approved target.');
     if (!healthOk) throw new DashboardError('health-check', 'Post-flash health check failed.');
     this.phase = 'verified'; return true;
