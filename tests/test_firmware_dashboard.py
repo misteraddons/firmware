@@ -51,6 +51,12 @@ class FirmwareDashboardManifestTests(unittest.TestCase):
             self.assertIn("/tools/firmware/*", headers)
             self.assertIn("no-transform", headers)
 
+    def test_dashboard_uses_shared_reflex_theme(self):
+        html = (ROOT / "web" / "firmware-dashboard" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('href="/stylesheets/reflex.css"', html)
+        self.assertIn('class="rx-app" data-reflex-ui', html)
+        self.assertIn("rx-button", html)
+
 
 if __name__ == "__main__":
     unittest.main()

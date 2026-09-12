@@ -7,27 +7,28 @@
   <meta http-equiv="Permissions-Policy" content="hid=(self), serial=(self), usb=(self)">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23090b0b'/%3E%3Cpath d='M10 14h44v36H10z' fill='none' stroke='%23d9ff36' stroke-width='5'/%3E%3Cpath d='M18 24h28M18 32h20M18 40h25' stroke='%235fe4d4' stroke-width='4'/%3E%3C/svg%3E">
   <title>RFLX Firmware Dashboard</title>
+  <link rel="stylesheet" href="/stylesheets/reflex.css">
   <link rel="stylesheet" href="./styles.css">
 </head>
-<body>
+<body class="rx-app" data-reflex-ui>
   <header><a class="brand" href="/">RFLX</a><div><h1>Firmware Dashboard</h1><p>Identify, validate, back up, update, verify.</p></div><span class="preview">Hardware validation pending</span></header>
-  <main>
-    <section class="hero panel">
-      <div><span class="eyebrow">LOCAL-FIRST DEVICE TOOL</span><h2>Firmware updates with identity checks.</h2><p>No analytics, uploads, automatic flashing, or product guessing. USB IDs only narrow candidates; the running device must identify itself.</p></div>
-      <div class="connection"><button id="connect-serial" class="primary">Connect serial device</button><button id="connect-hid">Select HID device</button><button id="connect-usb">Select PICOBOOT</button><small id="catalog-count">Loading approved catalog…</small></div>
+  <main class="rx-page">
+    <section class="hero panel rx-hero">
+      <div><span class="eyebrow rx-eyebrow">LOCAL-FIRST DEVICE TOOL</span><h2 class="rx-title">Firmware updates with identity checks.</h2><p class="rx-subtitle">No analytics, uploads, automatic flashing, or product guessing. USB IDs only narrow candidates; the running device must identify itself.</p></div>
+      <div class="connection"><button id="connect-serial" class="rx-button">Connect serial device</button><button id="connect-hid" class="rx-button rx-button-secondary">Select HID device</button><button id="connect-usb" class="rx-button rx-button-secondary">Select PICOBOOT</button><small id="catalog-count">Loading approved catalog…</small></div>
     </section>
 
-    <div id="status" role="status" aria-live="polite">Loading…</div>
+    <div id="status" class="rx-status rx-status-accent" role="status" aria-live="polite">Loading…</div>
 
     <section class="grid">
-      <article class="panel"><div class="step">01 / IDENTIFY</div><h3>Connected device</h3><dl><dt>Product</dt><dd id="product">Not connected</dd><dt>Hardware</dt><dd id="hardware">Unknown</dd><dt>Unique identity</dt><dd id="unique-id">Unavailable</dd><dt>Installed firmware</dt><dd id="installed">Unknown</dd></dl><p class="note">USB bcdDevice is deliberately ignored as a firmware version.</p></article>
-      <article class="panel"><div class="step">02 / CHECK</div><h3>Approved release</h3><dl><dt>Latest compatible</dt><dd id="latest">Not checked</dd></dl><p id="release-notes" class="notes">Identify a device to select only compatible approved releases.</p><button id="check-update" disabled>Check compatible release</button></article>
-      <article class="panel"><div class="step">03 / BACK UP</div><h3>Local backups</h3><div id="capabilities"></div><button id="backup-settings" disabled>Download settings backup</button><p class="note">An older release download is not a device backup. Authentication/full-flash data never leaves this browser.</p></article>
-      <article class="panel"><div class="step">04 / VALIDATE</div><h3>Firmware image</h3><p>Download fully, then validate SHA-256, UF2 block structure, RP2040 family, flash ranges, protected sectors, and hardware association.</p><button id="download" disabled>Download + validate UF2</button></article>
-      <article class="panel"><div class="step">05 / UPDATE</div><h3>Explicit approval</h3><p>Direct WebUSB PICOBOOT flashing is disabled until it passes hardware and driver testing. A validated UF2/manual BOOTSEL copy is available as an unvalidated fallback, not claimed browser flashing support.</p><button id="confirm" class="danger" disabled>Prepare manual fallback</button><div id="manual" hidden class="manual"><b>Manual fallback</b><ol><li>Enter BOOTSEL on the identified device.</li><li>Copy the downloaded UF2 to RPI-RP2.</li><li>Reconnect the running device here.</li><li>Verify identity, version, and health.</li></ol></div></article>
-      <article class="panel"><div class="step">06 / VERIFY</div><h3>Post-flash verification</h3><p>Copy completion is not success. Verification requires the same unique identity, exact target version, and product health commands.</p><button id="verify" disabled>Verify reconnected device</button></article>
+      <article class="panel rx-card"><div class="step rx-eyebrow">01 / IDENTIFY</div><h3 class="rx-card-title">Connected device</h3><dl><dt>Product</dt><dd id="product">Not connected</dd><dt>Hardware</dt><dd id="hardware">Unknown</dd><dt>Unique identity</dt><dd id="unique-id">Unavailable</dd><dt>Installed firmware</dt><dd id="installed">Unknown</dd></dl><p class="note">USB bcdDevice is deliberately ignored as a firmware version.</p></article>
+      <article class="panel rx-card"><div class="step rx-eyebrow">02 / CHECK</div><h3 class="rx-card-title">Approved release</h3><dl><dt>Latest compatible</dt><dd id="latest">Not checked</dd></dl><p id="release-notes" class="notes">Identify a device to select only compatible approved releases.</p><button id="check-update" class="rx-button" disabled>Check compatible release</button></article>
+      <article class="panel rx-card"><div class="step rx-eyebrow">03 / BACK UP</div><h3 class="rx-card-title">Local backups</h3><div id="capabilities"></div><button id="backup-settings" class="rx-button" disabled>Download settings backup</button><p class="note">An older release download is not a device backup. Authentication/full-flash data never leaves this browser.</p></article>
+      <article class="panel rx-card"><div class="step rx-eyebrow">04 / VALIDATE</div><h3 class="rx-card-title">Firmware image</h3><p>Download fully, then validate SHA-256, UF2 block structure, RP2040 family, flash ranges, protected sectors, and hardware association.</p><button id="download" class="rx-button" disabled>Download + validate UF2</button></article>
+      <article class="panel rx-card"><div class="step rx-eyebrow">05 / UPDATE</div><h3 class="rx-card-title">Explicit approval</h3><p>Direct WebUSB PICOBOOT flashing is disabled until it passes hardware and driver testing. A validated UF2/manual BOOTSEL copy is available as an unvalidated fallback, not claimed browser flashing support.</p><button id="confirm" class="rx-button rx-button-danger" disabled>Prepare manual fallback</button><div id="manual" hidden class="manual rx-status rx-status-accent"><b>Manual fallback</b><ol><li>Enter BOOTSEL on the identified device.</li><li>Copy the downloaded UF2 to RPI-RP2.</li><li>Reconnect the running device here.</li><li>Verify identity, version, and health.</li></ol></div></article>
+      <article class="panel rx-card"><div class="step rx-eyebrow">06 / VERIFY</div><h3 class="rx-card-title">Post-flash verification</h3><p>Copy completion is not success. Verification requires the same unique identity, exact target version, and product health commands.</p><button id="verify" class="rx-button" disabled>Verify reconnected device</button></article>
     </section>
-    <section class="panel activity"><h3>Activity</h3><ul id="activity"><li>No device activity.</li></ul></section>
+    <section class="panel rx-card activity"><h3 class="rx-card-title">Activity</h3><ul id="activity"><li>No device activity.</li></ul></section>
   </main>
   <footer>Desktop Chrome or Edge · HTTPS required · All device data stays local</footer>
   <script type="module" src="./app.js"></script>
