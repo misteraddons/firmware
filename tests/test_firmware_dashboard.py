@@ -18,8 +18,10 @@ class FirmwareDashboardManifestTests(unittest.TestCase):
         actionable = [product for product in manifest["products"] if product["identity"].get("supported")]
         self.assertEqual({"reflex-adapt-classic2usb", "reflex-prism"}, {product["id"] for product in actionable})
         classic = next(product for product in actionable if product["id"] == "reflex-adapt-classic2usb")
-        self.assertEqual("hid", classic["identity"]["transport"])
-        self.assertEqual(["Classic2USB"], classic["identity"]["webhidProductIds"])
+        self.assertEqual("serial", classic["identity"]["transport"])
+        self.assertEqual("classic2usb-management-v1", classic["identity"]["protocol"])
+        self.assertEqual("IDENTITY", classic["identity"]["identityCommand"])
+        self.assertEqual(["Classic2USB"], classic["identity"]["hidProductIds"])
         self.assertFalse(classic["releases"])
 
     def test_manifest_never_embeds_firmware_or_secrets(self):
@@ -59,6 +61,13 @@ class FirmwareDashboardManifestTests(unittest.TestCase):
         self.assertIn('href="/stylesheets/reflex.css"', html)
         self.assertIn('class="rx-app" data-reflex-ui', html)
         self.assertIn("rx-button", html)
+
+    def test_dashboard_exposes_identity_release_transport_and_manual_states(self):
+        html = (ROOT / "web" / "firmware-dashboard" / "index.html").read_text(encoding="utf-8")
+        for element_id in ("product-status", "identity-status", "release-status", "flash-status", "show-manual"):
+            self.assertIn(f'id="{element_id}"', html)
+        self.assertIn("Manual fallback — not identity-verified", html)
+        self.assertIn("no approved Classic2USB release", html)
 
 
 if __name__ == "__main__":

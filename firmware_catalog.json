@@ -76,10 +76,20 @@
       "expected_uf2_family": "0xE48BFF56",
       "browser_identity": {
         "supported": true,
-        "transport": "hid",
-        "report_id": 224,
-        "protocol": "rflx-webhid-device-info-v3",
-        "webhidProductIds": [
+        "transport": "serial",
+        "protocol": "classic2usb-management-v1",
+        "identityCommand": "IDENTITY",
+        "infoCommand": "INFO",
+        "schema": 1,
+        "product": "CLASSIC2USB",
+        "mcu": "RP2040",
+        "baseVid": "16D0",
+        "basePid": "1460",
+        "hardwareStrings": [
+          "RP2040 2MB"
+        ],
+        "hidReportId": 224,
+        "hidProductIds": [
           "Classic2USB"
         ],
         "usb_filters": [

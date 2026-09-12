@@ -79,13 +79,74 @@ export function identifyWebHidProduct(products, probe) {
   const info = parseWebHidDeviceInfo(probe.report);
   const candidates = matchCandidates(products, probe.usbInfo || {});
   const matches = candidates.filter(product =>
-    product.identity?.transport === 'hid' &&
-    (product.identity.webhidProductIds || []).includes(info.productId));
+    (product.identity?.hidProductIds || []).includes(info.productId));
   if (matches.length !== 1) throw new DashboardError('ambiguous-device', 'The HID identity query did not identify exactly one approved product.');
   const product = matches[0];
   const targets = product.hardwareCheck?.acceptedTargets || [];
   if (targets.length !== 1) throw new DashboardError('unknown-hardware', 'The product hardware compatibility group could not be verified.');
   return { product, hardware: targets[0], uniqueId: null, version: info.version, controllerName: info.controllerName };
+}
+
+function identityLines(response) {
+  return String(response || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+}
+
+export function parseManagementIdentity(response, expected) {
+  const responseLines = identityLines(response);
+  const lines = responseLines.filter(line => /^IDENTITY\b/i.test(line));
+  if (!lines.length && responseLines.some(line => /^ERR:UNKNOWN_CMD$/i.test(line))) throw new DashboardError('identity-unsupported', 'Installed firmware does not support the IDENTITY command.');
+  if (!lines.length) throw new DashboardError('missing-identity', 'The serial device did not return an IDENTITY record.');
+  if (lines.length !== 1) throw new DashboardError('ambiguous-identity', 'The serial device returned multiple identity records.');
+  const match = lines[0].match(/^IDENTITY SCHEMA=(\d+) PRODUCT=([A-Z0-9_]+) MCU=([A-Z0-9]+) BASE_VID=([0-9A-F]{4}) BASE_PID=([0-9A-F]{4}) UID=([0-9A-F]{16})$/i);
+  if (!match) throw new DashboardError('malformed-identity', 'The serial device returned a malformed IDENTITY record.');
+  const identity = { schema: Number(match[1]), product: match[2].toUpperCase(), mcu: match[3].toUpperCase(), vid: match[4].toUpperCase(), pid: match[5].toUpperCase(), uid: match[6].toUpperCase() };
+  const required = { schema: Number(expected.schema), product: String(expected.product).toUpperCase(), mcu: String(expected.mcu).toUpperCase(), vid: String(expected.baseVid).toUpperCase(), pid: String(expected.basePid).toUpperCase() };
+  for (const field of ['schema', 'product', 'mcu', 'vid', 'pid']) {
+    if (identity[field] !== required[field]) throw new DashboardError(field === 'product' ? 'wrong-product' : 'incompatible-hardware', `IDENTITY ${field} does not match the approved product.`);
+  }
+  const placeholders = new Set(['0000000000000000', 'FFFFFFFFFFFFFFFF', 'DEADBEEFDEADBEEF', '0123456789ABCDEF']);
+  if (placeholders.has(identity.uid) || /^(..)(?:\1){7}$/.test(identity.uid)) throw new DashboardError('placeholder-identity', 'The serial device returned a placeholder UID.');
+  return identity;
+}
+
+export function parseManagementInfo(response, expected) {
+  const lines = identityLines(response).filter(line => /^INFO\b/i.test(line));
+  if (lines.length !== 1) throw new DashboardError(lines.length ? 'ambiguous-identity' : 'missing-product', 'The serial device did not return exactly one INFO record.');
+  const match = lines[0].match(/^INFO PRODUCT=([A-Z0-9_]+) VERSION=([^\s]+) TAG=([^\s]*) HARDWARE="([^"]+)"$/i);
+  if (!match) throw new DashboardError('malformed-identity', 'The serial device returned a malformed INFO record.');
+  const product = match[1].toUpperCase();
+  if (product !== String(expected.product).toUpperCase()) throw new DashboardError('wrong-product', 'INFO product does not match Classic2USB.');
+  const hardware = match[4].trim();
+  if (!(expected.hardwareStrings || []).includes(hardware)) throw new DashboardError('incompatible-hardware', `Unapproved Classic2USB hardware: ${hardware}.`);
+  return { product, version: match[2], tag: match[3], hardware };
+}
+
+export function identifyClassicSerialProduct(products, probe) {
+  const candidates = matchCandidates(products, probe.usbInfo || {}).filter(product => product.identity?.protocol === 'classic2usb-management-v1');
+  if (candidates.length !== 1) throw new DashboardError('ambiguous-device', 'The selected serial USB ID does not identify exactly one Classic2USB catalog entry.');
+  const product = candidates[0];
+  const info = parseManagementInfo(probe.infoResponse, product.identity);
+  let management = null; let identitySupport = 'verified';
+  try { management = parseManagementIdentity(probe.identityResponse, product.identity); }
+  catch (error) { if (error.code !== 'identity-unsupported') throw error; identitySupport = 'unsupported'; }
+  const targets = product.hardwareCheck?.acceptedTargets || [];
+  if (targets.length !== 1) throw new DashboardError('unknown-hardware', 'Classic2USB hardware compatibility is ambiguous.');
+  return { product, hardware: targets[0], uniqueId: management?.uid || null, version: info.version, identitySupport, management, info };
+}
+
+function bootKey(device) {
+  return `${Number(device.vendorId).toString(16)}:${Number(device.productId).toString(16)}:${String(device.serialNumber || '').replace(/[^0-9a-f]/gi, '').toUpperCase()}`;
+}
+
+export function associateBootloaderTransition({ identity, transitionRequested, sourceDisconnected, beforeDevices = [], afterDevices = [] }) {
+  if (!identity?.uniqueId) throw new DashboardError('bootloader-unassociated', 'A verified application UID is required before bootloader association.');
+  if (!transitionRequested || !sourceDisconnected) throw new DashboardError('bootloader-unassociated', 'The verified serial device did not perform the observed bootloader transition.');
+  const before = new Set(beforeDevices.map(bootKey));
+  const candidates = afterDevices.filter(device => Number(device.vendorId) === 0x2e8a && Number(device.productId) === 0x0003 && !before.has(bootKey(device)));
+  if (candidates.length !== 1) throw new DashboardError('ambiguous-bootloader', 'Exactly one newly connected PICOBOOT device is required.');
+  const serial = String(candidates[0].serialNumber || '').replace(/[^0-9a-f]/gi, '').toUpperCase();
+  if (!serial || serial !== identity.uniqueId.toUpperCase()) throw new DashboardError('bootloader-unassociated', 'PICOBOOT did not expose the verified application UID; no browser write is allowed.');
+  return candidates[0];
 }
 
 export function identifyHardware(product, response) {
@@ -175,14 +236,16 @@ export async function validateDownload(bytes, release, product) {
 export class UpdateSession {
   constructor() { this.reset(); }
   reset() {
-    this.phase = 'idle'; this.identity = null; this.release = null; this.confirmed = false;
+    this.phase = 'idle'; this.identity = null; this.release = null; this.confirmed = false; this.bootloaderAssociated = false;
     this.backup = { settings: 'not-run', firmware: 'unsupported', fullFlash: 'unsupported' };
   }
   connected(identity) { this.identity = identity; this.phase = 'identified'; this.confirmed = false; }
   checked(release) { if (!this.identity) throw new DashboardError('state', 'Identify a device first.'); this.release = release; this.phase = 'ready'; }
   backupResult(kind, ok) { this.backup[kind] = ok ? 'complete' : 'failed'; if (!ok) throw new DashboardError('backup-failed', `${kind} backup failed.`); }
   confirm() { if (!this.release || !this.identity?.uniqueId) throw new DashboardError('state', 'A release and unique device identity are required.'); this.confirmed = true; }
+  associateBootloader() { if (!this.identity?.uniqueId) throw new DashboardError('bootloader-unassociated', 'Verified identity is required.'); this.bootloaderAssociated = true; }
   beginFlash() { if (!this.confirmed) throw new DashboardError('approval-required', 'Explicit update approval is required.'); this.phase = 'flashing'; }
+  beginDirectFlash() { if (!this.confirmed) throw new DashboardError('approval-required', 'Explicit update approval is required.'); if (!this.bootloaderAssociated) throw new DashboardError('bootloader-unassociated', 'The selected bootloader is not associated with the approved device.'); this.phase = 'flashing'; }
   disconnected() { if (this.phase === 'flashing') throw new DashboardError('disconnect', 'Device disconnected while updating.'); this.phase = 'disconnected'; }
   verify(identity, healthOk) {
     if (!this.identity || identity.uniqueId !== this.identity.uniqueId) throw new DashboardError('wrong-device', 'Reconnected device is not the device that was approved.');

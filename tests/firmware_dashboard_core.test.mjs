@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { DashboardError, SimulatedTransport, UpdateSession, compareVersions, identifyProduct, identifyWebHidProduct, parseWebHidDeviceInfo, validateUf2 } from '../web/firmware-dashboard/core.js';
+import { DashboardError, SimulatedTransport, UpdateSession, associateBootloaderTransition, compareVersions, identifyClassicSerialProduct, identifyProduct, identifyWebHidProduct, parseManagementIdentity, parseWebHidDeviceInfo, selectRelease, validateUf2 } from '../web/firmware-dashboard/core.js';
 
 const prism = {
   id: 'reflex-prism', label: 'Reflex Prism', usbFilters: [{ vendorId: 0x16d0, productId: 0x14f6 }],
@@ -29,16 +29,48 @@ test('query identifies product, hardware, version and unique identity', () => {
 test('Classic2USB WebHID device-info report identifies the product without trusting VID PID alone', () => {
   const report = new Uint8Array(63); report[0] = 0xad; report[1] = 3; report[2] = 2; report[3] = 4; report[4] = 1;
   report.set(new TextEncoder().encode('Classic2USB'), 30);
-  const product = { id: 'reflex-adapt-classic2usb', usbFilters: [{ vendorId: 0x16d0, productId: 0x1460 }], identity: { transport: 'hid', webhidProductIds: ['Classic2USB'] }, hardwareCheck: { acceptedTargets: [{ group: 'classic2usb-published', label: 'All published Classic2USB revisions' }] } };
+  const product = { id: 'reflex-adapt-classic2usb', usbFilters: [{ vendorId: 0x16d0, productId: 0x1460 }], identity: { hidProductIds: ['Classic2USB'] }, hardwareCheck: { acceptedTargets: [{ group: 'classic2usb-published', label: 'All published Classic2USB revisions' }] } };
   const found = identifyWebHidProduct([product], { usbInfo: { vendorId: 0x16d0, productId: 0x1460 }, report });
   assert.equal(found.product.id, product.id); assert.equal(found.version, '2.4.1'); assert.equal(found.uniqueId, null);
   assert.equal(parseWebHidDeviceInfo(report).productId, 'Classic2USB');
 });
 test('Classic2USB WebHID query rejects a shared VID PID with the wrong reported product', () => {
   const report = new Uint8Array(63); report[0] = 0xad; report.set(new TextEncoder().encode('DifferentProduct'), 30);
-  const product = { usbFilters: [{ vendorId: 0x16d0, productId: 0x1460 }], identity: { transport: 'hid', webhidProductIds: ['Classic2USB'] } };
+  const product = { usbFilters: [{ vendorId: 0x16d0, productId: 0x1460 }], identity: { hidProductIds: ['Classic2USB'] } };
   expectCode(() => identifyWebHidProduct([product], { usbInfo: { vendorId: 0x16d0, productId: 0x1460 }, report }), 'ambiguous-device');
 });
+const classicSerial = { id: 'reflex-adapt-classic2usb', usbFilters: [{ vendorId: 0x16d0, productId: 0x1460 }], releases: [], identity: { protocol: 'classic2usb-management-v1', schema: 1, product: 'CLASSIC2USB', mcu: 'RP2040', baseVid: '16D0', basePid: '1460', hardwareStrings: ['RP2040 2MB'] }, hardwareCheck: { acceptedTargets: [{ group: 'classic2usb-published', label: 'All published Classic2USB revisions' }] } };
+const classicInfo = 'INFO PRODUCT=Classic2USB VERSION=2.4.1 TAG=stable HARDWARE="RP2040 2MB"';
+const classicIdentity = 'IDENTITY SCHEMA=1 PRODUCT=Classic2USB MCU=RP2040 BASE_VID=16D0 BASE_PID=1460 UID=A1B2C3D4E5F60718';
+test('valid Classic2USB identity and version are accepted from one serial probe', () => {
+  const found = identifyClassicSerialProduct([classicSerial], { usbInfo: { vendorId: 0x16d0, productId: 0x1460 }, infoResponse: classicInfo, identityResponse: classicIdentity });
+  assert.equal(found.uniqueId, 'A1B2C3D4E5F60718'); assert.equal(found.version, '2.4.1'); assert.equal(found.identitySupport, 'verified');
+});
+test('unsupported IDENTITY retains product recognition but not unique identity', () => {
+  const found = identifyClassicSerialProduct([classicSerial], { usbInfo: { vendorId: 0x16d0, productId: 0x1460 }, infoResponse: classicInfo, identityResponse: 'ERR:UNKNOWN_CMD' });
+  assert.equal(found.product.id, classicSerial.id); assert.equal(found.uniqueId, null); assert.equal(found.identitySupport, 'unsupported');
+});
+test('malformed, placeholder, wrong-product and ambiguous identities are rejected', () => {
+  const expected = classicSerial.identity;
+  expectCode(() => parseManagementIdentity('', expected), 'missing-identity');
+  expectCode(() => parseManagementIdentity('IDENTITY broken', expected), 'malformed-identity');
+  expectCode(() => parseManagementIdentity(classicIdentity.replace('A1B2C3D4E5F60718', '0000000000000000'), expected), 'placeholder-identity');
+  expectCode(() => parseManagementIdentity(classicIdentity.replace('Classic2USB', 'MODERN2USB'), expected), 'wrong-product');
+  expectCode(() => parseManagementIdentity(`${classicIdentity}\n${classicIdentity}`, expected), 'ambiguous-identity');
+});
+test('wrong Classic2USB hardware and multiple catalog matches are rejected', () => {
+  expectCode(() => identifyClassicSerialProduct([classicSerial], { usbInfo: { vendorId: 0x16d0, productId: 0x1460 }, infoResponse: classicInfo.replace('RP2040 2MB', 'RP2350'), identityResponse: classicIdentity }), 'incompatible-hardware');
+  expectCode(() => identifyClassicSerialProduct([classicSerial, structuredClone(classicSerial)], { usbInfo: { vendorId: 0x16d0, productId: 0x1460 }, infoResponse: classicInfo, identityResponse: classicIdentity }), 'ambiguous-device');
+});
+test('bootloader association requires one new device exposing the approved UID', () => {
+  const identity = { uniqueId: 'A1B2C3D4E5F60718' };
+  const target = { vendorId: 0x2e8a, productId: 3, serialNumber: identity.uniqueId };
+  assert.equal(associateBootloaderTransition({ identity, transitionRequested: true, sourceDisconnected: true, afterDevices: [target] }), target);
+  expectCode(() => associateBootloaderTransition({ identity, transitionRequested: true, sourceDisconnected: true, afterDevices: [target, { ...target, serialNumber: '1111222233334444' }] }), 'ambiguous-bootloader');
+  expectCode(() => associateBootloaderTransition({ identity, transitionRequested: true, sourceDisconnected: true, afterDevices: [{ ...target, serialNumber: '1111222233334444' }] }), 'bootloader-unassociated');
+  expectCode(() => associateBootloaderTransition({ identity, transitionRequested: true, sourceDisconnected: false, afterDevices: [target] }), 'bootloader-unassociated');
+});
+test('Classic2USB has no approved release', () => assert.equal(selectRelease(classicSerial, 'classic2usb-published'), null));
 test('incompatible hardware is rejected', () => expectCode(() => identifyProduct([prism], { usbInfo: { vendorId: 0x16d0, productId: 0x14f6 }, response: '=== Status ===\nHardware target: Pro boards' }), 'incompatible-hardware'));
 test('corrupt UF2 is rejected', () => expectCode(() => validateUf2(uf2({ corrupt: true }), policy), 'corrupt-uf2'));
 test('wrong family is rejected', () => expectCode(() => validateUf2(uf2({ family: 1 }), policy), 'wrong-family'));
@@ -54,7 +86,7 @@ test('permission cancellation is represented without changing session state', ()
   assert.equal(error.code, 'permission-cancelled'); assert.equal(session.phase, 'idle');
 });
 test('disconnect while flashing fails', () => {
-  const session = new UpdateSession(); session.connected({ uniqueId: 'A' }); session.checked({ version: '1.11' }); session.confirm(); session.beginFlash();
+  const session = new UpdateSession(); session.connected({ uniqueId: 'A' }); session.checked({ version: '1.11' }); session.confirm(); session.associateBootloader(); session.beginFlash();
   expectCode(() => session.disconnected(), 'disconnect');
 });
 test('backup failures are blocking', () => { const session = new UpdateSession(); expectCode(() => session.backupResult('settings', false), 'backup-failed'); });
@@ -65,6 +97,7 @@ test('post-flash verification rejects wrong device, version, and health', () => 
   expectCode(() => ready().verify({ uniqueId: 'A', version: '1.11' }, false), 'health-check');
 });
 test('no flash can begin before explicit confirmation', () => { const session = new UpdateSession(); expectCode(() => session.beginFlash(), 'approval-required'); });
+test('confirmed direct flash remains blocked until bootloader association', () => { const session = new UpdateSession(); session.connected({ uniqueId: 'A' }); session.checked({ version: '1.11' }); session.confirm(); expectCode(() => session.beginDirectFlash(), 'bootloader-unassociated'); });
 test('simulated transport covers permission cancellation, disconnects, backups and no implicit writes', async () => {
   await assert.rejects(() => new SimulatedTransport({ permission: 'cancel' }).requestPermission(), error => error.code === 'permission-cancelled');
   const disconnected = new SimulatedTransport({ disconnectOnQuery: true }); await disconnected.requestPermission();
