@@ -57,6 +57,15 @@ def browser_product(item: installer.CatalogItem, root: Path, checksums: dict[str
         },
         "directFlash": {"supported": False, "reason": "Browser PICOBOOT write/verify is not hardware validated."},
     }
+    if item.browser_identity:
+        product.update({
+            "usbFilters": item.browser_identity.get("usb_filters", []),
+            "identity": item.browser_identity,
+            "hardwareCheck": {
+                "acceptedTargets": item.browser_identity.get("accepted_targets", []),
+                "knownMismatches": item.browser_identity.get("known_mismatches", []),
+            },
+        })
     if item.item_id != "reflex-prism":
         return product
 
@@ -137,7 +146,7 @@ def build_manifest(root: Path = ROOT) -> dict:
         "schema": 1,
         "generatedFrom": "firmware_catalog.json + checksums.sha256 + firmware_installer.py",
         "privacy": {"uploads": False, "analytics": False, "storage": "local-only"},
-        "transports": {"serial": "supported", "hid": "permission-only", "picoboot": "investigated-disabled"},
+        "transports": {"serial": "supported", "hid": "identity-query", "picoboot": "investigated-disabled"},
         "products": products,
     }
 

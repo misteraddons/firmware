@@ -13,11 +13,14 @@ class FirmwareDashboardManifestTests(unittest.TestCase):
         manifest = build_manifest(ROOT)
         self.assertEqual({item["id"] for item in catalog["items"]}, {item["id"] for item in manifest["products"]})
 
-    def test_only_queryable_approved_product_is_actionable(self):
+    def test_only_approved_products_are_queryable(self):
         manifest = build_manifest(ROOT)
         actionable = [product for product in manifest["products"] if product["identity"].get("supported")]
-        self.assertEqual(["reflex-prism"], [product["id"] for product in actionable])
-        self.assertTrue(actionable[0]["releases"])
+        self.assertEqual({"reflex-adapt-classic2usb", "reflex-prism"}, {product["id"] for product in actionable})
+        classic = next(product for product in actionable if product["id"] == "reflex-adapt-classic2usb")
+        self.assertEqual("hid", classic["identity"]["transport"])
+        self.assertEqual(["Classic2USB"], classic["identity"]["webhidProductIds"])
+        self.assertFalse(classic["releases"])
 
     def test_manifest_never_embeds_firmware_or_secrets(self):
         encoded = json.dumps(build_manifest(ROOT))

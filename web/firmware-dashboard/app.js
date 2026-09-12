@@ -1,6 +1,6 @@
-import { DashboardError, UpdateSession, compareVersions, identifyProduct, selectRelease, validateDownload } from './core.js';
+import { DashboardError, UpdateSession, compareVersions, identifyProduct, identifyWebHidProduct, selectRelease, validateDownload } from './core.js';
 
-const state = { manifest: null, port: null, reader: null, identity: null, release: null, image: null, session: new UpdateSession() };
+const state = { manifest: null, port: null, reader: null, hidDevice: null, identity: null, release: null, image: null, session: new UpdateSession() };
 const $ = selector => document.querySelector(selector);
 const log = (message, tone = '') => {
   const item = document.createElement('li'); item.textContent = message; if (tone) item.dataset.tone = tone;
@@ -60,9 +60,27 @@ async function connectSerial() {
 
 async function connectHid() {
   if (!navigator.hid) throw new DashboardError('unsupported', 'WebHID requires desktop Chrome or Edge over HTTPS.');
-  try { await navigator.hid.requestDevice({ filters: [] }); }
+  const filters = state.manifest.products
+    .filter(product => product.identity?.transport === 'hid')
+    .flatMap(product => product.usbFilters || [])
+    .map(filter => ({ vendorId: Number(filter.vendorId), productId: Number(filter.productId) }));
+  let selected;
+  try { [selected] = await navigator.hid.requestDevice({ filters }); }
   catch (error) { throw new DashboardError('permission-cancelled', error.name === 'NotFoundError' ? 'Device permission was cancelled.' : error.message); }
-  throw new DashboardError('ambiguous-device', 'HID permission alone cannot identify a product. Use its approved query transport.');
+  if (!selected) throw new DashboardError('permission-cancelled', 'Device permission was cancelled.');
+  try {
+    if (!selected.opened) await selected.open();
+    const report = await selected.receiveFeatureReport(0xe0);
+    const identity = identifyWebHidProduct(state.manifest.products, {
+      usbInfo: { vendorId: selected.vendorId, productId: selected.productId }, report: new Uint8Array(report.buffer),
+    });
+    state.hidDevice = selected; state.identity = identity; state.session.connected(identity);
+    renderIdentity(); setStatus('Device identified over WebHID. No approved update is offered without a compatible catalog release.', 'ok');
+    log(`Identified ${identity.product.label} / ${identity.hardware.label}; firmware ${identity.version}.`, 'ok');
+  } catch (error) {
+    if (selected.opened) await selected.close().catch(() => {});
+    throw error;
+  }
 }
 
 async function connectBootloader() {

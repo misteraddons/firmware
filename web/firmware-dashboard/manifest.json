@@ -8,7 +8,7 @@
   },
   "transports": {
     "serial": "supported",
-    "hid": "permission-only",
+    "hid": "identity-query",
     "picoboot": "investigated-disabled"
   },
   "products": [
@@ -97,6 +97,74 @@
       "directFlash": {
         "supported": false,
         "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      }
+    },
+    {
+      "id": "reflex-adapt-classic2usb",
+      "label": "Reflex Adapt Classic2USB",
+      "installMethod": "coming_soon",
+      "notes": "Browser identity is approved. No firmware release is published through this catalog.",
+      "usbFilters": [
+        {
+          "vendorId": 5840,
+          "productId": 5216
+        }
+      ],
+      "identity": {
+        "supported": true,
+        "transport": "hid",
+        "report_id": 224,
+        "protocol": "rflx-webhid-device-info-v3",
+        "webhidProductIds": [
+          "Classic2USB"
+        ],
+        "usb_filters": [
+          {
+            "vendorId": 5840,
+            "productId": 5216
+          }
+        ],
+        "accepted_targets": [
+          {
+            "group": "classic2usb-published",
+            "label": "All published Classic2USB revisions",
+            "markers": [
+              "Classic2USB"
+            ]
+          }
+        ],
+        "known_mismatches": []
+      },
+      "releases": [],
+      "backups": {
+        "settings": {
+          "supported": false,
+          "reason": "No approved browser settings protocol."
+        },
+        "firmware": {
+          "supported": false,
+          "reason": "Application firmware readback is unavailable."
+        },
+        "fullFlash": {
+          "supported": false,
+          "reason": "PICOBOOT readback is not hardware validated."
+        }
+      },
+      "directFlash": {
+        "supported": false,
+        "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      },
+      "hardwareCheck": {
+        "acceptedTargets": [
+          {
+            "group": "classic2usb-published",
+            "label": "All published Classic2USB revisions",
+            "markers": [
+              "Classic2USB"
+            ]
+          }
+        ],
+        "knownMismatches": []
       }
     },
     {

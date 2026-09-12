@@ -65,6 +65,42 @@
       ]
     },
     {
+      "id": "reflex-adapt-classic2usb",
+      "label": "Reflex Adapt Classic2USB",
+      "install_method": "coming_soon",
+      "file_type": "uf2",
+      "controller_check": true,
+      "local_paths": [],
+      "sources": [],
+      "notes": "Browser identity is approved. No firmware release is published through this catalog.",
+      "expected_uf2_family": "0xE48BFF56",
+      "browser_identity": {
+        "supported": true,
+        "transport": "hid",
+        "report_id": 224,
+        "protocol": "rflx-webhid-device-info-v3",
+        "webhidProductIds": [
+          "Classic2USB"
+        ],
+        "usb_filters": [
+          {
+            "vendorId": 5840,
+            "productId": 5216
+          }
+        ],
+        "accepted_targets": [
+          {
+            "group": "classic2usb-published",
+            "label": "All published Classic2USB revisions",
+            "markers": [
+              "Classic2USB"
+            ]
+          }
+        ],
+        "known_mismatches": []
+      }
+    },
+    {
       "id": "reflex-encode-v1",
       "label": "Reflex Encode V1.2",
       "install_method": "rp2040",

@@ -161,6 +161,7 @@ class CatalogItem:
     post_flash_check: Optional[dict] = None
     notes: str = ""
     expected_uf2_family: Optional[int] = None
+    browser_identity: Optional[dict] = None
 
 
 @dataclass(frozen=True)
@@ -387,6 +388,7 @@ def load_catalog(root: Optional[Path] = None) -> List[CatalogItem]:
                 post_flash_check=raw.get("post_flash_check"),
                 notes=raw.get("notes", ""),
                 expected_uf2_family=parse_optional_int(raw.get("expected_uf2_family")),
+                browser_identity=raw.get("browser_identity"),
             )
         )
     return items

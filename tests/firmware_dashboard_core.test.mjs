@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { DashboardError, SimulatedTransport, UpdateSession, compareVersions, identifyProduct, validateUf2 } from '../web/firmware-dashboard/core.js';
+import { DashboardError, SimulatedTransport, UpdateSession, compareVersions, identifyProduct, identifyWebHidProduct, parseWebHidDeviceInfo, validateUf2 } from '../web/firmware-dashboard/core.js';
 
 const prism = {
   id: 'reflex-prism', label: 'Reflex Prism', usbFilters: [{ vendorId: 0x16d0, productId: 0x14f6 }],
@@ -25,6 +25,19 @@ test('shared VID PID remains ambiguous without exact query match', () => {
 test('query identifies product, hardware, version and unique identity', () => {
   const found = identifyProduct([prism], { usbInfo: { vendorId: 0x16d0, productId: 0x14f6 }, response: '=== Status ===\nFirmware Version: v1.11\nBoard ID: 0123456789ABCDEF\nHardware target: V1.05/V1.1 boards' });
   assert.equal(found.product.id, 'reflex-prism'); assert.equal(found.version, '1.11'); assert.equal(found.uniqueId, '0123456789ABCDEF');
+});
+test('Classic2USB WebHID device-info report identifies the product without trusting VID PID alone', () => {
+  const report = new Uint8Array(63); report[0] = 0xad; report[1] = 3; report[2] = 2; report[3] = 4; report[4] = 1;
+  report.set(new TextEncoder().encode('Classic2USB'), 30);
+  const product = { id: 'reflex-adapt-classic2usb', usbFilters: [{ vendorId: 0x16d0, productId: 0x1460 }], identity: { transport: 'hid', webhidProductIds: ['Classic2USB'] }, hardwareCheck: { acceptedTargets: [{ group: 'classic2usb-published', label: 'All published Classic2USB revisions' }] } };
+  const found = identifyWebHidProduct([product], { usbInfo: { vendorId: 0x16d0, productId: 0x1460 }, report });
+  assert.equal(found.product.id, product.id); assert.equal(found.version, '2.4.1'); assert.equal(found.uniqueId, null);
+  assert.equal(parseWebHidDeviceInfo(report).productId, 'Classic2USB');
+});
+test('Classic2USB WebHID query rejects a shared VID PID with the wrong reported product', () => {
+  const report = new Uint8Array(63); report[0] = 0xad; report.set(new TextEncoder().encode('DifferentProduct'), 30);
+  const product = { usbFilters: [{ vendorId: 0x16d0, productId: 0x1460 }], identity: { transport: 'hid', webhidProductIds: ['Classic2USB'] } };
+  expectCode(() => identifyWebHidProduct([product], { usbInfo: { vendorId: 0x16d0, productId: 0x1460 }, report }), 'ambiguous-device');
 });
 test('incompatible hardware is rejected', () => expectCode(() => identifyProduct([prism], { usbInfo: { vendorId: 0x16d0, productId: 0x14f6 }, response: '=== Status ===\nHardware target: Pro boards' }), 'incompatible-hardware'));
 test('corrupt UF2 is rejected', () => expectCode(() => validateUf2(uf2({ corrupt: true }), policy), 'corrupt-uf2'));

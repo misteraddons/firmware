@@ -60,6 +60,34 @@ export function identifyProduct(products, probe) {
   return { product, hardware, uniqueId: uniqueId || null, version: version || null };
 }
 
+export function parseWebHidDeviceInfo(input) {
+  let data = input instanceof Uint8Array ? input : new Uint8Array(input.buffer, input.byteOffset || 0, input.byteLength);
+  if (data[0] !== 0xad && (data[0] === 0xe0 || data[1] === 0xad)) data = data.slice(1);
+  let shift = 0;
+  if (data[0] !== 0xad) {
+    if (data[0] === 1 && data.length >= 62) shift = -1;
+    else throw new DashboardError('invalid-identity', 'The HID device did not return a valid RFLX device-info report.');
+  }
+  const at = index => data[index + shift] || 0;
+  const text = (start, end) => String.fromCharCode(...data.slice(Math.max(0, start + shift), Math.max(0, end + shift))).replace(/\0/g, '').trim();
+  const productId = text(30, 50);
+  if (!productId) throw new DashboardError('invalid-identity', 'The HID device-info report did not contain a product identity.');
+  return { protocolVersion: at(1), version: `${at(2)}.${at(3)}.${at(4)}`, controllerName: text(10, 30), productId };
+}
+
+export function identifyWebHidProduct(products, probe) {
+  const info = parseWebHidDeviceInfo(probe.report);
+  const candidates = matchCandidates(products, probe.usbInfo || {});
+  const matches = candidates.filter(product =>
+    product.identity?.transport === 'hid' &&
+    (product.identity.webhidProductIds || []).includes(info.productId));
+  if (matches.length !== 1) throw new DashboardError('ambiguous-device', 'The HID identity query did not identify exactly one approved product.');
+  const product = matches[0];
+  const targets = product.hardwareCheck?.acceptedTargets || [];
+  if (targets.length !== 1) throw new DashboardError('unknown-hardware', 'The product hardware compatibility group could not be verified.');
+  return { product, hardware: targets[0], uniqueId: null, version: info.version, controllerName: info.controllerName };
+}
+
 export function identifyHardware(product, response) {
   const rules = product.hardwareCheck?.acceptedTargets || [];
   const mismatches = product.hardwareCheck?.knownMismatches || [];
