@@ -10,7 +10,7 @@ const setStatus = (text, tone = '') => { $('#status').textContent = text; $('#st
 
 function renderCapabilities() {
   const caps = [
-    ['Settings backup', 'Supported after verified Prism serial identification', true],
+    ['Settings backup', 'Implemented and simulated; disabled until hardware validation', false],
     ['Firmware backup', 'Disabled — application firmware readback is not implemented', false],
     ['Full-flash backup', 'Disabled — PICOBOOT readback requires hardware/driver validation', false],
     ['Direct browser flashing', 'Disabled — PICOBOOT write/verify is not hardware validated', false],
@@ -78,7 +78,7 @@ function renderIdentity() {
   $('#hardware').textContent = identity?.hardware.label || 'Unknown';
   $('#unique-id').textContent = identity?.uniqueId || 'Unavailable — updating blocked';
   $('#installed').textContent = identity?.version || 'Unknown (bcdDevice ignored)';
-  $('#backup-settings').disabled = !identity?.product.backups?.settings?.command;
+  $('#backup-settings').disabled = !identity?.product.backups?.settings?.supported;
   $('#check-update').disabled = !identity;
 }
 

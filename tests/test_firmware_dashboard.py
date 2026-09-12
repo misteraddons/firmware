@@ -33,6 +33,8 @@ class FirmwareDashboardManifestTests(unittest.TestCase):
         self.assertEqual({"prism-v11", "prism-v12", "prism-v13"}, groups)
         self.assertEqual("prism-pro", prism["hardwareCheck"]["knownMismatches"][0]["group"])
         self.assertEqual(0x101F0000, prism["flashPolicy"]["protectedFlashRanges"][0]["start"])
+        self.assertFalse(prism["backups"]["settings"]["supported"])
+        self.assertTrue(prism["backups"]["settings"]["implemented"])
         latest = next(release for release in prism["releases"] if release["version"] == "1.11")
         self.assertEqual({"prism-v11", "prism-v12", "prism-v13"}, set(latest["hardwareGroups"]))
 

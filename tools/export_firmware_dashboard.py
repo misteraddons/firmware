@@ -79,12 +79,14 @@ def browser_product(item: installer.CatalogItem, root: Path, checksums: dict[str
         },
         "backups": {
             "settings": {
-                "supported": True,
+                "supported": False,
+                "implemented": True,
                 "transport": "serial",
                 "command": "dashboard config get",
                 "expect": ["[DASHBOARD] CONFIG BEGIN", "[DASHBOARD] CONFIG END"],
                 "timeoutMs": int(float(hardware.get("command_timeout", 8)) * 1000),
                 "sensitivity": "local-settings",
+                "reason": "Implemented and simulated, but disabled until backup output is validated on hardware.",
             },
             "firmware": {"supported": False, "reason": "No application firmware readback command."},
             "fullFlash": {"supported": False, "reason": "PICOBOOT readback and original-board restore are not hardware validated."},

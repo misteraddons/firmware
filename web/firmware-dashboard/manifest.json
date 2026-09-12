@@ -304,7 +304,7 @@
     },
     {
       "id": "reflex-prism",
-      "label": "Reflex Prism",
+      "label": "Reflex Prism v1.11 Release Candidate",
       "installMethod": "rp2040",
       "notes": "",
       "usbFilters": [
@@ -341,9 +341,9 @@
             "prism-v13"
           ],
           "fileName": "prism_dac.uf2",
-          "sha256": "497df0e701aedccf510f56a8e13e0e32985fe029a459d8aa364913015b77d2c7",
-          "bytes": 542208,
-          "url": "https://raw.githubusercontent.com/misteraddons/firmware/aa5093cc9920d1ebd0670c196f2d75725fc9f88b/reflex-prism/v1.11/prism_dac.uf2",
+          "sha256": "2033708f2993bd7a3b0b15c55f3b0bbe6abf42c8f461ed6a23c5662b0add511a",
+          "bytes": 570368,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/be29ae7b56368515963a20c2f3fa5a6e1bada6bb/reflex-prism/v1.11/prism_dac.uf2",
           "releaseNotes": "Approved Reflex Prism stable firmware from the canonical firmware catalog."
         },
         {
@@ -457,7 +457,8 @@
       ],
       "backups": {
         "settings": {
-          "supported": true,
+          "supported": false,
+          "implemented": true,
           "transport": "serial",
           "command": "dashboard config get",
           "expect": [
@@ -465,7 +466,8 @@
             "[DASHBOARD] CONFIG END"
           ],
           "timeoutMs": 8000,
-          "sensitivity": "local-settings"
+          "sensitivity": "local-settings",
+          "reason": "Implemented and simulated, but disabled until backup output is validated on hardware."
         },
         "firmware": {
           "supported": false,
