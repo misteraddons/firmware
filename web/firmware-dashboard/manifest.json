@@ -670,9 +670,9 @@
           ],
           "fileName": "prism_dac.uf2",
           "fileType": "uf2",
-          "sha256": "2033708f2993bd7a3b0b15c55f3b0bbe6abf42c8f461ed6a23c5662b0add511a",
-          "bytes": 570368,
-          "url": "https://raw.githubusercontent.com/misteraddons/firmware/be29ae7b56368515963a20c2f3fa5a6e1bada6bb/reflex-prism/v1.11/prism_dac.uf2",
+          "sha256": "38b611c6c06ca1f5c33a23dadd2f08c7b92df1ee216539d9731c1889b13d9464",
+          "bytes": 599552,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/e82d5d26f52259acebef041acc262ddc130b3264/reflex-prism/v1.11/prism_dac.uf2",
           "releaseNotes": "Approved Reflex Prism stable firmware from the canonical firmware catalog."
         },
         {
