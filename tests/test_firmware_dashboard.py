@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from tools.export_firmware_dashboard import ROOT, build_manifest
-from tools.publish_firmware_dashboard import FILES, export
+from tools.publish_firmware_dashboard import FILES, check, export
 
 
 class FirmwareDashboardManifestTests(unittest.TestCase):
@@ -64,10 +64,63 @@ class FirmwareDashboardManifestTests(unittest.TestCase):
 
     def test_dashboard_exposes_identity_release_transport_and_manual_states(self):
         html = (ROOT / "web" / "firmware-dashboard" / "index.html").read_text(encoding="utf-8")
-        for element_id in ("product-status", "identity-status", "release-status", "flash-status", "show-manual"):
+        for element_id in ("product-status", "identity-status", "release-status", "flash-status", "show-manual", "product-picker"):
             self.assertIn(f'id="{element_id}"', html)
         self.assertIn("Manual fallback — not identity-verified", html)
-        self.assertIn("no approved Classic2USB release", html)
+        # The catalog is no longer Classic2USB-only, so the manual step warns about
+        # using the wrong image generally rather than naming one product.
+        self.assertIn("Use only the validated file", html)
+        self.assertIn("share the RP2040 family and will copy without complaint", html)
+
+    def test_manual_selection_is_labelled_as_unverified(self):
+        html = (ROOT / "web" / "firmware-dashboard" / "index.html").read_text(encoding="utf-8")
+        self.assertIn("nothing verifies the hardware", html)
+        core = (ROOT / "web" / "firmware-dashboard" / "core.js").read_text(encoding="utf-8")
+        # A declared product must never be able to present itself as verified.
+        self.assertIn("identitySupport: 'declared'", core)
+        self.assertIn("uniqueId: null", core)
+
+
+
+class FirmwareDashboardDriftTests(unittest.TestCase):
+    """The export is one-directional, so drift has to be detectable."""
+
+    @staticmethod
+    def _docs_repo(root: str) -> Path:
+        repo = Path(root)
+        (repo / "docs").mkdir(parents=True)
+        (repo / "docs" / "_headers").write_text("/*\n  X-Frame-Options: DENY\n", encoding="utf-8")
+        return repo
+
+    def test_a_freshly_exported_docs_repo_reports_no_drift(self):
+        with tempfile.TemporaryDirectory() as name:
+            repo = self._docs_repo(name)
+            export(repo)
+            self.assertEqual(check(repo), [])
+
+    def test_an_unexported_docs_repo_reports_every_missing_file(self):
+        with tempfile.TemporaryDirectory() as name:
+            repo = self._docs_repo(name)
+            drift = check(repo)
+            self.assertEqual(len([d for d in drift if d.startswith("absent")]), len(FILES) + 1)
+
+    def test_an_edited_deployed_file_is_detected(self):
+        with tempfile.TemporaryDirectory() as name:
+            repo = self._docs_repo(name)
+            export(repo)
+            target = repo / "docs" / "tools" / "firmware" / "app.js"
+            target.write_text(target.read_text(encoding="utf-8") + "\n// drifted\n", encoding="utf-8")
+            self.assertIn("deployed copy differs: app.js", check(repo))
+
+    def test_a_stale_deployed_manifest_is_detected(self):
+        with tempfile.TemporaryDirectory() as name:
+            repo = self._docs_repo(name)
+            export(repo)
+            target = repo / "docs" / "tools" / "firmware" / "manifest.json"
+            manifest = json.loads(target.read_text(encoding="utf-8"))
+            manifest["products"][0]["releases"] = []
+            target.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+            self.assertIn("deployed copy differs: manifest.json", check(repo))
 
 
 if __name__ == "__main__":
