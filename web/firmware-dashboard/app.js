@@ -1,4 +1,4 @@
-import { DashboardError, UpdateSession, associateBootloaderTransition, compareVersions, identifyAdaptManagement, identifyClassicSerialProduct, identifyProduct, identifyWebHidProduct, matchCandidates, selectRelease, validateDownload } from './core.js';
+import { DashboardError, UpdateSession, associateBootloaderTransition, compareVersions, declareProduct, identifyAdaptManagement, identifyClassicSerialProduct, identifyProduct, identifyWebHidProduct, matchCandidates, selectRelease, validateDownload } from './core.js';
 
 const state = { manifest: null, port: null, reader: null, hidDevice: null, bootloader: null, identity: null, release: null, image: null, session: new UpdateSession() };
 const $ = selector => document.querySelector(selector);
@@ -18,6 +18,7 @@ async function beginConnection() {
     state.session.reset(); state.release = null; state.image = null;
   }
   for (const id of ['download', 'confirm', 'verify']) $('#' + id).disabled = true;
+  $('#product-picker').value = '';
   renderIdentity();
 }
 
@@ -48,7 +49,28 @@ async function loadManifest() {
   const response = await fetch('./manifest.json', { cache: 'no-store' });
   if (!response.ok) throw new Error(`Manifest request failed (${response.status})`);
   state.manifest = await response.json();
-  $('#catalog-count').textContent = `${state.manifest.products.length} approved catalog entries`;
+  const withReleases = state.manifest.products.filter(product => (product.releases || []).length);
+  $('#catalog-count').textContent = `${state.manifest.products.length} approved catalog entries, ${withReleases.length} with a published release`;
+  const picker = $('#product-picker');
+  for (const product of withReleases) {
+    const option = document.createElement('option');
+    option.value = product.id;
+    option.textContent = product.label;
+    picker.append(option);
+  }
+}
+
+// Reaching a release without a device: the operator names the product. Everything
+// that needs a verified unit stays locked, because nothing here checked anything.
+async function chooseProduct(productId) {
+  await beginConnection();
+  $('#product-picker').value = productId;
+  if (!productId) { setStatus('Selection cleared. Nothing is selected.', ''); return; }
+  const identity = declareProduct(state.manifest.products, productId);
+  acceptIdentity(identity);
+  renderIdentity(); renderUpdateAvailability();
+  setStatus('Product set from your selection. No attached hardware was identified or checked.', 'warn');
+  log(`Selected ${identity.product.label} by hand; no device identity was verified.`, 'warn');
 }
 
 async function readSerialResponse(port, command, timeoutMs = 8000) {
@@ -191,12 +213,13 @@ async function connectBootloader() {
 
 function renderIdentity() {
   const identity = state.identity;
+  const declared = identity?.identitySupport === 'declared';
   $('#product').textContent = identity?.product.label || 'Not connected';
   $('#hardware').textContent = identity?.target || identity?.hardware.label || 'Unknown';
-  $('#product-status').textContent = identity ? 'Recognized' : 'Not recognized';
-  $('#identity-status').textContent = identity?.uniqueId ? 'Verified' : identity?.identitySupport === 'unsupported' ? 'Installed firmware lacks IDENTITY support' : identity ? 'Not verified' : 'Not checked';
+  $('#product-status').textContent = !identity ? 'Not recognized' : declared ? 'Stated by you, not detected' : 'Recognized';
+  $('#identity-status').textContent = identity?.uniqueId ? 'Verified' : declared ? 'Not verified — no device was queried' : identity?.identitySupport === 'unsupported' ? 'Installed firmware lacks IDENTITY support' : identity ? 'Not verified' : 'Not checked';
   $('#unique-id').textContent = identity?.uniqueId || 'Unavailable';
-  $('#installed').textContent = identity ? `${identity.version || 'Unknown'}${identity.build ? ' / ' + identity.build : ''}` : 'Unknown (bcdDevice ignored)';
+  $('#installed').textContent = !identity ? 'Unknown (bcdDevice ignored)' : declared ? 'Unknown — nothing was read from a device' : `${identity.version || 'Unknown'}${identity.build ? ' / ' + identity.build : ''}`;
   $('#backup-settings').disabled = !identity?.product.backups?.settings?.supported;
   $('#check-update').disabled = !identity;
   $('#show-manual').disabled = !identity;
@@ -209,7 +232,9 @@ function renderUpdateAvailability() {
   $('#release-status').textContent = hasRelease ? 'Approved release available' : 'No approved firmware release available';
   $('#flash-status').textContent = state.identity?.product.directFlash?.supported ? 'Available' : 'Browser flashing transport unavailable';
   $('#latest').textContent = hasRelease ? 'Not checked' : 'None approved';
-  $('#release-notes').textContent = hasRelease ? 'Check compatibility to select an approved release.' : 'This catalog contains no approved Classic2USB firmware release.';
+  $('#release-notes').textContent = hasRelease
+    ? 'Check compatibility to select an approved release.'
+    : `This catalog publishes no approved release for ${state.identity?.product.label || 'this product'}.`;
  }
 
 function checkUpdate() {
@@ -226,9 +251,12 @@ function checkUpdate() {
 
 function showManualFallback() {
   $('#manual').hidden = false;
-  const verified = !!state.identity?.uniqueId;
-  $('#manual-mode').textContent = verified ? 'Identity was verified in application mode, but a manual mass-storage copy cannot preserve that association.' : 'Installed firmware lacks unique identity support; this manual path is not identity-verified.';
-  setStatus('Manual instructions shown. The dashboard has not selected, downloaded, or written firmware.', 'warn');
+  $('#manual-mode').textContent = state.identity?.uniqueId
+    ? 'Identity was verified in application mode, but a manual mass-storage copy cannot preserve that association.'
+    : state.identity?.identitySupport === 'declared'
+      ? 'You selected this product yourself. Nothing checked what is actually attached, so confirm the board matches before copying.'
+      : 'Installed firmware lacks unique identity support; this manual path is not identity-verified.';
+  setStatus('Manual instructions shown. Nothing has been written to a device.', 'warn');
 }
 
 async function backupSettings() {
@@ -302,6 +330,7 @@ function handle(action) { return async () => { try { await action(); } catch (er
 
 window.addEventListener('DOMContentLoaded', handle(async () => {
   renderCapabilities(); await loadManifest(); renderIdentity();
+  $('#product-picker').addEventListener('change', handle(() => chooseProduct($('#product-picker').value)));
   $('#connect-serial').addEventListener('click', handle(connectSerial));
   $('#connect-hid').addEventListener('click', handle(connectHid));
   $('#connect-usb').addEventListener('click', handle(connectBootloader));

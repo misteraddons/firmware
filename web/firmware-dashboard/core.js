@@ -78,6 +78,23 @@ export function identifyProduct(products, probe) {
   return { product, hardware, uniqueId: rawUniqueId || null, version: version || null, identitySupport: rawUniqueId ? 'verified' : 'unsupported' };
 }
 
+// Most products have no browser identity protocol, so the only way to reach their
+// releases is for the operator to say what they have. Nothing here is measured:
+// uniqueId stays null so every gate that demands a verified unit stays shut, and
+// identitySupport is 'declared' rather than 'verified' so the UI cannot present
+// an assertion as a check.
+export function declareProduct(products, productId) {
+  const product = (products || []).find(item => item.id === productId);
+  if (!product) throw new DashboardError('unknown-device', 'No approved product matches that selection.');
+  if (!(product.releases || []).length) throw new DashboardError('no-approved-release', 'This product has no approved release to download.');
+  return {
+    // No revision was determined and none is needed: these products publish one
+    // image each. Saying so beats echoing the product name back as "hardware".
+    product, hardware: { group: product.id, label: 'Not determined (one image per product)' },
+    uniqueId: null, version: null, identitySupport: 'declared',
+  };
+}
+
 export function parseWebHidDeviceInfo(input) {
   let data = input instanceof Uint8Array ? input : new Uint8Array(input.buffer, input.byteOffset || 0, input.byteLength);
   if (data[0] !== 0xad && (data[0] === 0xe0 || data[1] === 0xad)) data = data.slice(1);

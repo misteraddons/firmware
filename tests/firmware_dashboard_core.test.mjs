@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
-import { DashboardError, SimulatedTransport, UpdateSession, associateBootloaderTransition, compareVersions, identifyClassicSerialProduct, identifyProduct, identifyWebHidProduct, parseManagementIdentity, parseWebHidDeviceInfo, selectRelease, sha256Hex, validateDownload, validateUf2 } from '../web/firmware-dashboard/core.js';
+import { DashboardError, SimulatedTransport, UpdateSession, associateBootloaderTransition, compareVersions, identifyClassicSerialProduct, identifyProduct, identifyWebHidProduct, parseManagementIdentity, declareProduct, parseWebHidDeviceInfo, selectRelease, sha256Hex, validateDownload, validateUf2 } from '../web/firmware-dashboard/core.js';
 
 const prism = {
   id: 'reflex-prism', label: 'Reflex Prism', usbFilters: [{ vendorId: 0x16d0, productId: 0x14f6 }],
@@ -198,6 +198,34 @@ test('a UF2 release with no approved flash policy is refused rather than waved t
   const release = await approvedRelease();
   await assert.rejects(() => validateDownload(uf2().buffer, release, { connectedHardwareGroup: 'prism-v11' }),
     error => error instanceof DashboardError && error.code === 'unvalidatable-image');
+});
+test('a manually declared product reaches its release without ever claiming verification', () => {
+  const manifest = JSON.parse(fs.readFileSync(new URL('../web/firmware-dashboard/manifest.json', import.meta.url)));
+  const declared = declareProduct(manifest.products, 'reflex-ctrl-nes');
+  assert.equal(declared.product.id, 'reflex-ctrl-nes');
+  assert.equal(declared.identitySupport, 'declared');
+  assert.equal(declared.uniqueId, null, 'a declared product must never carry a unit identity');
+  assert.equal(declared.version, null, 'nothing was read from a device, so there is no installed version');
+  const release = selectRelease(declared.product, declared.hardware.group, 'stable');
+  assert.ok(release, 'the declared product should resolve its own release');
+  assert.equal(release.fileType, 'uf2');
+});
+test('declaring a product leaves every gate that demands a verified unit shut', () => {
+  const manifest = JSON.parse(fs.readFileSync(new URL('../web/firmware-dashboard/manifest.json', import.meta.url)));
+  const declared = declareProduct(manifest.products, 'reflex-ctrl-nes');
+  const session = new UpdateSession();
+  session.connected(declared);
+  session.checked(selectRelease(declared.product, declared.hardware.group, 'stable'));
+  // No uniqueId means no approval, so no flash and no bootloader association.
+  expectCode(() => session.confirm(), 'state');
+  expectCode(() => session.associateBootloader(), 'bootloader-unassociated');
+  expectCode(() => associateBootloaderTransition({ identity: declared, transitionRequested: true, sourceDisconnected: true,
+    afterDevices: [{ vendorId: 0x2e8a, productId: 0x0003, serialNumber: 'AABBCCDDEEFF0011' }] }), 'bootloader-unassociated');
+});
+test('declaring an unknown or release-less product is refused', () => {
+  const manifest = JSON.parse(fs.readFileSync(new URL('../web/firmware-dashboard/manifest.json', import.meta.url)));
+  expectCode(() => declareProduct(manifest.products, 'not-a-product'), 'unknown-device');
+  expectCode(() => declareProduct(manifest.products, 'reflex-adapt-classic2usb'), 'no-approved-release');
 });
 test('every published release in the manifest resolves to a real file matching its recorded hash and policy', () => {
   const manifest = JSON.parse(fs.readFileSync(new URL('../web/firmware-dashboard/manifest.json', import.meta.url)));
