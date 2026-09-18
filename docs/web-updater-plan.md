@@ -4,9 +4,19 @@ Proposed URL: `https://docs.misteraddons.com/tools/firmware/`.
 Separate app from Adapt.html and Prism.html; source belongs in this repository.
 Status: design reviewed. PICOBOOT command framing, erase/write planning and the
 transport class are implemented in `core.js` and unit-tested against a
-simulated USB device (`tests/picoboot.test.mjs`); no interface discovery,
-control transfer or bulk transfer in that path has run against real hardware.
+simulated USB device (`tests/picoboot.test.mjs`).
+
+The **read** path is hardware validated (2026-09-18, one Classic2USB, one
+Windows host, desktop Chrome; `build/picoboot-hardware-probe-2026-09-18.log`).
+Serving `core.js` from localhost and driving it from the browser, the shipping
+module discovered the interface, claimed it, ran both control transfers and
+read boot ROM back over bulk. The **write** path — erase, write, and the
+readback-compare loop in `performDirectFlash()` — has never run against
+hardware and remains simulation-only.
+
 `directFlash` stays disabled in `manifest.json`, and no UI control invokes it.
+A validated read path is not permission to flash: the association defect below
+still makes the approval step unreachable.
 
 ## Reuse
 
@@ -44,10 +54,12 @@ control transfer or bulk transfer in that path has run against real hardware.
   real program/full-flash readback, but browser support is a separate transport
   implementation. Windows WinUSB binding is confirmed: on 2026-09-18 an RP2040 in
   BOOTSEL exposed its PICOBOOT interface as vendor class 0xff already bound to
-  WINUSB, with no Zadig step and no driver replacement, so the discovery rule in
-  `findPicobootInterface()` matches real descriptors. Endpoint count and
-  direction ordering were not observed, and Linux permissions remain untested.
-  Do not replace a controller's normal USB driver indiscriminately.
+  WINUSB, with no Zadig step and no driver replacement, and Chrome claimed it.
+  The bootrom reports that interface as `[out/bulk, in/bulk]` while its mass
+  storage interface reports `[in/bulk, out/bulk]`, so the OUT-then-IN ordering
+  `findPicobootInterface()` requires genuinely discriminates between them.
+  Linux permissions remain untested. Do not replace a controller's normal USB
+  driver indiscriminately.
 - Fallback: validated UF2 download plus manual BOOTSEL copy, or explicitly
   selected BOOTSEL folder where browser support permits. Folder access cannot
   read existing flash. Preserve the verified identity over USB mode changes.
