@@ -436,3 +436,32 @@ export class PicobootTransport {
     return this.runCommand({ cmdId: PICOBOOT.cmd.reboot, args });
   }
 }
+
+function bytesEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+// Erases, writes and reads back an already-validated UF2 image (see validateDownload) over an
+// open PicobootTransport. Every written range is read back and compared before returning, so a
+// write that silently did not take is reported rather than assumed. Does not reboot the device;
+// callers decide when to call transport.reboot() once they are ready to hand control back.
+export async function performDirectFlash(transport, image, { onProgress } = {}) {
+  const plan = planFlashWrites(image);
+  await transport.exclusiveAccess(2);
+  for (const erase of plan.erases) {
+    await transport.eraseRange(erase.addr, erase.size);
+    onProgress?.({ phase: 'erase', addr: erase.addr, size: erase.size });
+  }
+  for (const write of plan.writes) {
+    await transport.writeRange(write.addr, write.bytes);
+    onProgress?.({ phase: 'write', addr: write.addr, size: write.bytes.length });
+  }
+  for (const write of plan.writes) {
+    const readback = await transport.readRange(write.addr, write.bytes.length);
+    if (!bytesEqual(readback, write.bytes)) throw new DashboardError('verify-mismatch', `Flash readback did not match the written image at 0x${write.addr.toString(16)}.`);
+    onProgress?.({ phase: 'verify', addr: write.addr, size: write.bytes.length });
+  }
+  return plan;
+}

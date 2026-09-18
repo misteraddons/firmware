@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DashboardError, PICOBOOT, PicobootTransport, decodePicobootStatus, encodePicobootCommand, findPicobootInterface, planFlashWrites } from '../web/firmware-dashboard/core.js';
+import { DashboardError, PICOBOOT, PicobootTransport, decodePicobootStatus, encodePicobootCommand, findPicobootInterface, performDirectFlash, planFlashWrites } from '../web/firmware-dashboard/core.js';
 
 function expectCode(fn, code) { return assert.rejects(fn, error => error instanceof DashboardError && error.code === code); }
 
@@ -146,4 +146,55 @@ test('a status token mismatch is rejected rather than attributed to the wrong co
   await transport.open();
   device.forceStatus({ token: 999, statusCode: PICOBOOT.status.ok, cmdId: PICOBOOT.cmd.flashErase, inProgress: 0 });
   await expectCode(() => transport.eraseRange(0x10000000, 0x1000), 'picoboot-status');
+});
+
+// Backs writeRange/readRange with an address-keyed store so a round trip actually proves the
+// bytes that come back are the bytes that were sent, rather than whatever the transport assumes.
+function memoryBackedPicobootDevice({ corruptReads = false } = {}) {
+  const device = fakePicobootDevice();
+  const memory = new Map();
+  let lastRange = null;
+  const { transferOut, transferIn } = device;
+  device.transferOut = async (endpointNumber, data) => {
+    const result = await transferOut.call(device, endpointNumber, data);
+    if (data.byteLength === 32) {
+      const view = new DataView(data.buffer, data.byteOffset, 32);
+      if (data[8] === PICOBOOT.cmd.write || data[8] === PICOBOOT.cmd.read) lastRange = { addr: view.getUint32(16, true), size: view.getUint32(20, true) };
+    } else if (lastRange && data.byteLength === lastRange.size) {
+      memory.set(lastRange.addr, Uint8Array.from(data));
+    }
+    return result;
+  };
+  device.transferIn = async (endpointNumber, length) => {
+    if (length === 1) return transferIn.call(device, endpointNumber, length);
+    const stored = !corruptReads && lastRange ? memory.get(lastRange.addr) : null;
+    const bytes = stored && stored.length === length ? stored : new Uint8Array(length).fill(0xff);
+    device.calls.push(['in', endpointNumber, length]);
+    return { status: 'ok', data: new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength) };
+  };
+  return device;
+}
+
+function twoBlockImage() {
+  const first = uf2Block({ target: 0x10000000, data: Uint8Array.of(10, 20, 30) });
+  const second = uf2Block({ target: 0x10001000, data: Uint8Array.of(40, 50, 60) });
+  const image = new Uint8Array(first.length + second.length); image.set(first, 0); image.set(second, first.length);
+  return image;
+}
+
+test('performDirectFlash erases, writes and reads back every block in order', async () => {
+  const device = memoryBackedPicobootDevice();
+  const transport = new PicobootTransport(device);
+  await transport.open();
+  const phases = [];
+  const plan = await performDirectFlash(transport, twoBlockImage(), { onProgress: event => phases.push(event.phase) });
+  assert.deepEqual(plan.erases, [{ addr: 0x10000000, size: 0x2000 }]);
+  assert.deepEqual(phases, ['erase', 'write', 'write', 'verify', 'verify']);
+});
+
+test('performDirectFlash rejects a write that silently did not take', async () => {
+  const device = memoryBackedPicobootDevice({ corruptReads: true });
+  const transport = new PicobootTransport(device);
+  await transport.open();
+  await expectCode(() => performDirectFlash(transport, twoBlockImage()), 'verify-mismatch');
 });
