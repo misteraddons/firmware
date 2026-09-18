@@ -72,9 +72,10 @@ export function identifyProduct(products, probe) {
   }
   const product = matches[0];
   const hardware = identifyHardware(product, probe.response);
-  const uniqueId = extractField(probe.response, product.identity.uniqueIdPatterns || []);
+  const rawUniqueId = extractField(probe.response, product.identity.uniqueIdPatterns || []).toUpperCase();
+  if (rawUniqueId && isPlaceholderUid(rawUniqueId)) throw new DashboardError('placeholder-identity', 'The serial device returned a placeholder unique ID.');
   const version = extractField(probe.response, product.identity.versionPatterns || []);
-  return { product, hardware, uniqueId: uniqueId || null, version: version || null };
+  return { product, hardware, uniqueId: rawUniqueId || null, version: version || null, identitySupport: rawUniqueId ? 'verified' : 'unsupported' };
 }
 
 export function parseWebHidDeviceInfo(input) {
@@ -104,6 +105,11 @@ export function identifyWebHidProduct(products, probe) {
   return { product, hardware: targets[0], uniqueId: null, version: info.version, controllerName: info.controllerName };
 }
 
+const PLACEHOLDER_UIDS = new Set(['0000000000000000', 'FFFFFFFFFFFFFFFF', 'DEADBEEFDEADBEEF', '0123456789ABCDEF']);
+export function isPlaceholderUid(uid) {
+  return PLACEHOLDER_UIDS.has(uid) || /^(..)(?:\1){7}$/.test(uid);
+}
+
 function identityLines(response) {
   return String(response || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
 }
@@ -121,8 +127,7 @@ export function parseManagementIdentity(response, expected) {
   for (const field of ['schema', 'product', 'mcu', 'vid', 'pid']) {
     if (identity[field] !== required[field]) throw new DashboardError(field === 'product' ? 'wrong-product' : 'incompatible-hardware', `IDENTITY ${field} does not match the approved product.`);
   }
-  const placeholders = new Set(['0000000000000000', 'FFFFFFFFFFFFFFFF', 'DEADBEEFDEADBEEF', '0123456789ABCDEF']);
-  if (placeholders.has(identity.uid) || /^(..)(?:\1){7}$/.test(identity.uid)) throw new DashboardError('placeholder-identity', 'The serial device returned a placeholder UID.');
+  if (isPlaceholderUid(identity.uid)) throw new DashboardError('placeholder-identity', 'The serial device returned a placeholder UID.');
   return identity;
 }
 

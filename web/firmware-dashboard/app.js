@@ -127,8 +127,14 @@ async function connectSerial() {
   const response = await readSerialResponse(port, product.identity.command, product.identity.timeoutMs || 8000);
   const identity = identifyProduct(state.manifest.products, { usbInfo: { vendorId: info.usbVendorId, productId: info.usbProductId }, response });
   acceptIdentity(identity);
-  renderIdentity(); renderUpdateAvailability(); setStatus('Device identified. Check for a compatible release.', 'ok');
-  log(`Identified ${identity.product.label} / ${identity.hardware.label}.`, 'ok');
+  renderIdentity(); renderUpdateAvailability();
+  if (identity.identitySupport === 'verified') {
+    setStatus('Product recognized and unique identity verified from one serial query.', 'ok');
+    log(`Verified ${identity.product.label} UID ${identity.uniqueId}; firmware ${identity.version}.`, 'ok');
+  } else {
+    setStatus('Product recognized, but no unique identity was returned. Manual updates are not identity-verified.', 'warn');
+    log(`Recognized ${identity.product.label} / ${identity.hardware.label}; unique identity unavailable.`, 'warn');
+  }
 }
 
 async function connectHid() {

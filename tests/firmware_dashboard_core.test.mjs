@@ -23,8 +23,15 @@ test('shared VID PID remains ambiguous without exact query match', () => {
   expectCode(() => identifyProduct([prism, twin], { usbInfo: { vendorId: 0x16d0, productId: 0x14f6 }, response: '=== Status ===\nHardware target: V1.05/V1.1 boards' }), 'ambiguous-device');
 });
 test('query identifies product, hardware, version and unique identity', () => {
-  const found = identifyProduct([prism], { usbInfo: { vendorId: 0x16d0, productId: 0x14f6 }, response: '=== Status ===\nFirmware Version: v1.11\nBoard ID: 0123456789ABCDEF\nHardware target: V1.05/V1.1 boards' });
-  assert.equal(found.product.id, 'reflex-prism'); assert.equal(found.version, '1.11'); assert.equal(found.uniqueId, '0123456789ABCDEF');
+  const found = identifyProduct([prism], { usbInfo: { vendorId: 0x16d0, productId: 0x14f6 }, response: '=== Status ===\nFirmware Version: v1.11\nBoard ID: FEDCBA9876543210\nHardware target: V1.05/V1.1 boards' });
+  assert.equal(found.product.id, 'reflex-prism'); assert.equal(found.version, '1.11'); assert.equal(found.uniqueId, 'FEDCBA9876543210'); assert.equal(found.identitySupport, 'verified');
+});
+test('placeholder Prism unique ID is rejected, not silently accepted', () => {
+  expectCode(() => identifyProduct([prism], { usbInfo: { vendorId: 0x16d0, productId: 0x14f6 }, response: '=== Status ===\nFirmware Version: v1.11\nBoard ID: 0000000000000000\nHardware target: V1.05/V1.1 boards' }), 'placeholder-identity');
+});
+test('missing Prism unique ID leaves identity unsupported rather than implicitly verified', () => {
+  const found = identifyProduct([prism], { usbInfo: { vendorId: 0x16d0, productId: 0x14f6 }, response: '=== Status ===\nFirmware Version: v1.11\nHardware target: V1.05/V1.1 boards' });
+  assert.equal(found.uniqueId, null); assert.equal(found.identitySupport, 'unsupported');
 });
 test('Classic2USB WebHID device-info report identifies the product without trusting VID PID alone', () => {
   const report = new Uint8Array(63); report[0] = 0xad; report[1] = 3; report[2] = 2; report[3] = 4; report[4] = 1;
