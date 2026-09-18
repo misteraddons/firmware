@@ -9,7 +9,7 @@
   "transports": {
     "serial": "supported",
     "hid": "identity-query",
-    "picoboot": "investigated-disabled"
+    "picoboot": "scaffolded-disabled"
   },
   "products": [
     {

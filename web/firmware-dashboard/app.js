@@ -38,7 +38,7 @@ function renderCapabilities() {
     ['Settings backup', 'Implemented and simulated; disabled until hardware validation', false],
     ['Firmware backup', 'Disabled — application firmware readback is not implemented', false],
     ['Full-flash backup', 'Disabled — PICOBOOT readback requires hardware/driver validation', false],
-    ['Direct browser flashing', 'Disabled — PICOBOOT write/verify is not hardware validated', false],
+    ['Direct browser flashing', 'PICOBOOT read/write/verify implemented and simulated; disabled until hardware validation', false],
     ['Validated UF2 download', hasApprovedRelease ? 'Available for an approved compatible release' : 'Unavailable until an approved compatible release exists', hasApprovedRelease],
   ];
   $('#capabilities').innerHTML = caps.map(([name, detail, enabled]) => `<div class="cap"><span>${name}</span><b class="${enabled ? 'yes' : 'no'}">${enabled ? 'Available' : 'Unavailable'}</b><small>${detail}</small></div>`).join('');

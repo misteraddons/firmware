@@ -295,3 +295,144 @@ export class SimulatedTransport {
     this.writes.push(bytes); return bytes.byteLength;
   }
 }
+
+// PICOBOOT USB interface exposed by the RP2040/RP2350 bootrom (VID 0x2e8a PID 0x0003).
+// Wire format from raspberrypi/pico-sdk src/common/boot_picoboot_headers/include/boot/picoboot.h;
+// control/bulk sequencing from raspberrypi/picotool picoboot_connection/picoboot_connection.c.
+// Implemented and exercised only against a fake USB device double (see tests/picoboot.test.mjs).
+// Not hardware validated: directFlash stays disabled in manifest.json until a physical bring-up passes.
+export const PICOBOOT = Object.freeze({
+  magic: 0x431fd10b,
+  ifReset: 0x41,
+  ifCmdStatus: 0x42,
+  cmd: Object.freeze({ exclusiveAccess: 0x1, reboot: 0x2, flashErase: 0x3, read: 0x84, write: 0x5, exitXip: 0x6, enterCmdXip: 0x7 }),
+  status: Object.freeze({ ok: 0, unknownCmd: 1, invalidCmdLength: 2, invalidTransferLength: 3, invalidAddress: 4, badAlignment: 5, interleavedWrite: 6, rebooting: 7, unknownError: 8, invalidState: 9, notPermitted: 10, invalidArg: 11, bufferTooSmall: 12, preconditionNotMet: 13, modifiedData: 14, invalidData: 15, notFound: 16, unsupportedModification: 17 }),
+  pageSize: 256,
+  sectorSize: 4096,
+});
+
+let picobootToken = 1;
+
+export function encodePicobootCommand({ cmdId, args = new Uint8Array(0), transferLength = 0, token = picobootToken++ }) {
+  const bytes = new Uint8Array(32);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, PICOBOOT.magic, true);
+  view.setUint32(4, token >>> 0, true);
+  bytes[8] = cmdId;
+  bytes[9] = args.length;
+  view.setUint32(12, transferLength >>> 0, true);
+  bytes.set(args.subarray(0, 16), 16);
+  return { bytes, token };
+}
+
+export function decodePicobootStatus(data) {
+  const view = data instanceof DataView ? data : new DataView(data.buffer, data.byteOffset || 0, data.byteLength);
+  if (view.byteLength !== 16) throw new DashboardError('picoboot-status', 'PICOBOOT status response was not 16 bytes.');
+  return { token: view.getUint32(0, true), statusCode: view.getUint32(4, true), cmdId: view.getUint8(8), inProgress: !!view.getUint8(9) };
+}
+
+function rangeArgs(addr, size) {
+  const args = new Uint8Array(8);
+  new DataView(args.buffer).setUint32(0, addr >>> 0, true);
+  new DataView(args.buffer).setUint32(4, size >>> 0, true);
+  return args;
+}
+
+// Turns an already-validated UF2 image (see validateUf2) into an ordered erase/write plan:
+// erase covers the union of flash sectors the image touches, merged into contiguous runs.
+export function planFlashWrites(bytes) {
+  const view = bytes instanceof DataView ? bytes : new DataView(bytes.buffer, bytes.byteOffset || 0, bytes.byteLength);
+  const writes = [];
+  for (let offset = 0; offset < view.byteLength; offset += UF2.blockSize) {
+    const target = view.getUint32(offset + 12, true);
+    const payload = view.getUint32(offset + 16, true);
+    writes.push({ addr: target, bytes: new Uint8Array(view.buffer, view.byteOffset + offset + 32, payload) });
+  }
+  writes.sort((a, b) => a.addr - b.addr);
+  const sectors = new Set();
+  for (const write of writes) {
+    const start = Math.floor(write.addr / PICOBOOT.sectorSize) * PICOBOOT.sectorSize;
+    const end = Math.ceil((write.addr + write.bytes.length) / PICOBOOT.sectorSize) * PICOBOOT.sectorSize;
+    for (let sector = start; sector < end; sector += PICOBOOT.sectorSize) sectors.add(sector);
+  }
+  const erases = [];
+  for (const sector of [...sectors].sort((a, b) => a - b)) {
+    const last = erases[erases.length - 1];
+    if (last && last.addr + last.size === sector) last.size += PICOBOOT.sectorSize;
+    else erases.push({ addr: sector, size: PICOBOOT.sectorSize });
+  }
+  return { erases, writes };
+}
+
+// Finds the vendor-specific (class 0xff) interface exposing exactly one bulk OUT and one bulk
+// IN endpoint, matching picoboot_connection.c's discovery rule without depending on interface index.
+export function findPicobootInterface(configuration) {
+  for (const iface of configuration?.interfaces || []) {
+    const alt = iface.alternate;
+    const endpoints = alt?.endpoints || [];
+    if (alt?.interfaceClass !== 0xff || endpoints.length !== 2) continue;
+    const [first, second] = endpoints;
+    if (first.type === 'bulk' && first.direction === 'out' && second.type === 'bulk' && second.direction === 'in') {
+      return { interfaceNumber: iface.interfaceNumber, outEndpoint: first.endpointNumber, inEndpoint: second.endpointNumber };
+    }
+  }
+  throw new DashboardError('picoboot-interface', 'No PICOBOOT vendor interface with one bulk OUT and one bulk IN endpoint was found.');
+}
+
+// Thin wrapper over a WebUSB USBDevice (or a duck-typed double in tests). No caller in app.js
+// invokes this yet; direct browser flashing stays behind manifest.json's disabled directFlash flag.
+export class PicobootTransport {
+  constructor(device) { this.device = device; this.interfaceInfo = null; }
+
+  async open() {
+    if (!this.device.opened) await this.device.open();
+    if (this.device.configuration == null) await this.device.selectConfiguration(1);
+    this.interfaceInfo = findPicobootInterface(this.device.configuration);
+    await this.device.claimInterface(this.interfaceInfo.interfaceNumber);
+  }
+
+  async reset() {
+    await this.device.controlTransferOut({ requestType: 'vendor', recipient: 'interface', request: PICOBOOT.ifReset, value: 0, index: this.interfaceInfo.interfaceNumber });
+  }
+
+  async status() {
+    const result = await this.device.controlTransferIn({ requestType: 'vendor', recipient: 'interface', request: PICOBOOT.ifCmdStatus, value: 0, index: this.interfaceInfo.interfaceNumber }, 16);
+    return decodePicobootStatus(result.data);
+  }
+
+  async runCommand({ cmdId, args, transferLength = 0, outData = null }) {
+    const { bytes, token } = encodePicobootCommand({ cmdId, args, transferLength });
+    const sent = await this.device.transferOut(this.interfaceInfo.outEndpoint, bytes);
+    if (sent.status !== 'ok' || sent.bytesWritten !== bytes.byteLength) throw new DashboardError('picoboot-transfer', 'PICOBOOT command transfer failed.');
+    let inData = null;
+    if (transferLength) {
+      if (cmdId & 0x80) {
+        const result = await this.device.transferIn(this.interfaceInfo.inEndpoint, transferLength);
+        if (result.status !== 'ok') throw new DashboardError('picoboot-transfer', 'PICOBOOT data read failed.');
+        inData = new Uint8Array(result.data.buffer, result.data.byteOffset, result.data.byteLength);
+      } else {
+        const result = await this.device.transferOut(this.interfaceInfo.outEndpoint, outData);
+        if (result.status !== 'ok' || result.bytesWritten !== outData.byteLength) throw new DashboardError('picoboot-transfer', 'PICOBOOT data write failed.');
+      }
+    }
+    // The zero-length ACK travels opposite the data phase (or opposite the command itself when there is no data phase).
+    if (cmdId & 0x80) await this.device.transferOut(this.interfaceInfo.outEndpoint, new Uint8Array(0));
+    else await this.device.transferIn(this.interfaceInfo.inEndpoint, 1);
+    const status = await this.status();
+    if (status.token !== token || status.cmdId !== cmdId) throw new DashboardError('picoboot-status', 'PICOBOOT status did not match the issued command.');
+    if (status.statusCode !== PICOBOOT.status.ok) throw new DashboardError('picoboot-status', `PICOBOOT command failed with status ${status.statusCode}.`);
+    return inData;
+  }
+
+  exclusiveAccess(level = 2) { return this.runCommand({ cmdId: PICOBOOT.cmd.exclusiveAccess, args: Uint8Array.of(level) }); }
+  eraseRange(addr, size) { return this.runCommand({ cmdId: PICOBOOT.cmd.flashErase, args: rangeArgs(addr, size) }); }
+  writeRange(addr, bytes) { return this.runCommand({ cmdId: PICOBOOT.cmd.write, args: rangeArgs(addr, bytes.byteLength), transferLength: bytes.byteLength, outData: bytes }); }
+  readRange(addr, size) { return this.runCommand({ cmdId: PICOBOOT.cmd.read, args: rangeArgs(addr, size), transferLength: size }); }
+  reboot(pc = 0, sp = 0, delayMs = 500) {
+    const args = new Uint8Array(12);
+    new DataView(args.buffer).setUint32(0, pc >>> 0, true);
+    new DataView(args.buffer).setUint32(4, sp >>> 0, true);
+    new DataView(args.buffer).setUint32(8, delayMs >>> 0, true);
+    return this.runCommand({ cmdId: PICOBOOT.cmd.reboot, args });
+  }
+}
