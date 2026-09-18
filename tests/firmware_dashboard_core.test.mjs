@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { DashboardError, SimulatedTransport, UpdateSession, associateBootloaderTransition, compareVersions, identifyClassicSerialProduct, identifyProduct, identifyWebHidProduct, parseManagementIdentity, parseWebHidDeviceInfo, selectRelease, validateUf2 } from '../web/firmware-dashboard/core.js';
+import { DashboardError, SimulatedTransport, UpdateSession, associateBootloaderTransition, compareVersions, identifyClassicSerialProduct, identifyProduct, identifyWebHidProduct, parseManagementIdentity, parseWebHidDeviceInfo, selectRelease, sha256Hex, validateDownload, validateUf2 } from '../web/firmware-dashboard/core.js';
 
 const prism = {
   id: 'reflex-prism', label: 'Reflex Prism', usbFilters: [{ vendorId: 0x16d0, productId: 0x14f6 }],
@@ -117,6 +117,47 @@ test('wrong family is rejected', () => expectCode(() => validateUf2(uf2({ family
 test('out of range and protected writes are rejected', () => {
   expectCode(() => validateUf2(uf2({ target: 0x20000000 }), policy), 'flash-range');
   expectCode(() => validateUf2(uf2({ target: 0x101f0000 }), policy), 'protected-range');
+});
+// validateDownload is the gate between "some bytes arrived" and "this is the approved
+// image for the attached board": hash, UF2 structure, then hardware-group approval.
+const approvedRelease = async (overrides = {}) => ({ version: '1.11', sha256: await sha256Hex(uf2()), hardwareGroups: ['prism-v11'], ...overrides });
+const connected = (group = 'prism-v11') => ({ flashPolicy: policy, connectedHardwareGroup: group });
+
+test('validateDownload accepts an image whose hash and hardware group both match', async () => {
+  const result = await validateDownload(uf2().buffer, await approvedRelease(), connected());
+  assert.equal(result.digest, await sha256Hex(uf2()));
+  assert.equal(result.blocks, 1); assert.equal(result.family, 0xe48bff56);
+});
+test('validateDownload rejects a payload whose hash is not the approved one', async () => {
+  const release = await approvedRelease({ sha256: 'a'.repeat(64) });
+  await assert.rejects(() => validateDownload(uf2().buffer, release, connected()),
+    error => error instanceof DashboardError && error.code === 'checksum');
+});
+test('validateDownload compares hashes case-insensitively', async () => {
+  const release = await approvedRelease();
+  release.sha256 = release.sha256.toUpperCase();
+  const result = await validateDownload(uf2().buffer, release, connected());
+  assert.ok(result.digest);
+});
+test('validateDownload rejects an image not approved for the connected hardware revision', async () => {
+  const release = await approvedRelease({ hardwareGroups: ['prism-v12'] });
+  await assert.rejects(() => validateDownload(uf2().buffer, release, connected('prism-v11')),
+    error => error instanceof DashboardError && error.code === 'incompatible-image');
+});
+test('validateDownload refuses an unknown connected hardware group rather than defaulting to allowed', async () => {
+  const release = await approvedRelease();
+  await assert.rejects(() => validateDownload(uf2().buffer, release, { flashPolicy: policy }),
+    error => error instanceof DashboardError && error.code === 'incompatible-image');
+});
+test('validateDownload still applies UF2 structural and range checks after the hash passes', async () => {
+  const wrongFamily = uf2({ family: 1 });
+  const release = await approvedRelease({ sha256: await sha256Hex(wrongFamily) });
+  await assert.rejects(() => validateDownload(wrongFamily.buffer, release, connected()),
+    error => error instanceof DashboardError && error.code === 'wrong-family');
+  const protectedWrite = uf2({ target: 0x101f0000 });
+  const release2 = await approvedRelease({ sha256: await sha256Hex(protectedWrite) });
+  await assert.rejects(() => validateDownload(protectedWrite.buffer, release2, connected()),
+    error => error instanceof DashboardError && error.code === 'protected-range');
 });
 test('semantic version comparison handles prereleases', () => {
   assert.equal(compareVersions('1.11.0', '1.10.10'), 1); assert.equal(compareVersions('1.11.0-beta.1', '1.11.0'), -1); assert.equal(compareVersions('v1.11', '1.11.0'), 0);
