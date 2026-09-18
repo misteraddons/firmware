@@ -65,6 +65,19 @@ test('malformed, placeholder, wrong-product and ambiguous identities are rejecte
   expectCode(() => parseManagementIdentity(classicIdentity.replace('Classic2USB', 'MODERN2USB'), expected), 'wrong-product');
   expectCode(() => parseManagementIdentity(`${classicIdentity}\n${classicIdentity}`, expected), 'ambiguous-identity');
 });
+// Real firmware answers INFO with the INFO record followed by STATUS/AUTORESOLVE/
+// ADAPTSTATE/OVERLAY telemetry lines, not the single line the other fixtures use.
+test('a multi-line INFO response is parsed from the INFO record alone', () => {
+  const chatty = [classicInfo,
+    'STATUS INPUT=1 SAVED_INPUT=1 CONFIG_OUT=1 RUNTIME_OUT=1 PLAYERS=2',
+    'STATUS CONFIG_NAME=DInput RUNTIME_NAME=DInput',
+    'AUTORESOLVE IN=0 INSRC=0 OUT=1 FLAGS=0x0',
+    'ADAPTSTATE ENABLED=0 RATE_HZ=60 PLAYERS=2',
+    'OVERLAY ORDER=U,D,L,R,P1,P2,P3,P4',
+  ].join('\n');
+  const found = identifyClassicSerialProduct([classicSerial], { usbInfo: { vendorId: 0x16d0, productId: 0x1460 }, infoResponse: chatty, identityResponse: classicIdentity });
+  assert.equal(found.version, '2.4.1'); assert.equal(found.identitySupport, 'verified');
+});
 test('wrong Classic2USB hardware and multiple catalog matches are rejected', () => {
   expectCode(() => identifyClassicSerialProduct([classicSerial], { usbInfo: { vendorId: 0x16d0, productId: 0x1460 }, infoResponse: classicInfo.replace('RP2040 2MB', 'RP2350'), identityResponse: classicIdentity }), 'incompatible-hardware');
   expectCode(() => identifyClassicSerialProduct([classicSerial, structuredClone(classicSerial)], { usbInfo: { vendorId: 0x16d0, productId: 0x1460 }, infoResponse: classicInfo, identityResponse: classicIdentity }), 'ambiguous-device');

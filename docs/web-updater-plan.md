@@ -42,8 +42,12 @@ control transfer or bulk transfer in that path has run against real hardware.
   for identity/settings and bootloader entry. Application MSC is not required.
 - Investigate WebUSB PICOBOOT for RP2040 read/write/verify. picotool demonstrates
   real program/full-flash readback, but browser support is a separate transport
-  implementation. Validate Windows WinUSB binding and Linux permissions; do
-  not replace a controller's normal USB driver indiscriminately.
+  implementation. Windows WinUSB binding is confirmed: on 2026-09-18 an RP2040 in
+  BOOTSEL exposed its PICOBOOT interface as vendor class 0xff already bound to
+  WINUSB, with no Zadig step and no driver replacement, so the discovery rule in
+  `findPicobootInterface()` matches real descriptors. Endpoint count and
+  direction ordering were not observed, and Linux permissions remain untested.
+  Do not replace a controller's normal USB driver indiscriminately.
 - Fallback: validated UF2 download plus manual BOOTSEL copy, or explicitly
   selected BOOTSEL folder where browser support permits. Folder access cannot
   read existing flash. Preserve the verified identity over USB mode changes.
@@ -56,6 +60,38 @@ control transfer or bulk transfer in that path has run against real hardware.
 - Test release-asset CORS or use a narrowly scoped same-origin approved mirror.
   No unrestricted download proxy, embedded GitHub credentials or third-party
   analytics/scripts on pages with device access.
+
+## Known defect: bootloader association cannot succeed
+
+Measured on a Classic2USB, 2026-09-18 (`build/picoboot-hardware-probe-2026-09-18.log`).
+
+`associateBootloaderTransition()` requires the PICOBOOT device's USB serial
+number to equal the verified application UID. On RP2040 it does not: the
+bootrom serial is 12 hex characters, application UIDs are contractually 16, and
+the two values are unrelated — not a prefix, suffix or transform of each other.
+`connectBootloader()` therefore always raises `bootloader-unassociated`, so the
+association step is unreachable no matter how the transport behaves.
+
+picotool does not trust that serial either; for RP2040 it reads the flash ID
+over PICOBOOT and compares that instead. Repairing this means issuing PICOBOOT
+commands to the board, so the correlation rule and the transport have to be
+brought up together rather than separately.
+
+Until then, treat any UID-to-bootloader correlation as unimplemented. Do not
+relax the check to make it pass — an unverified correlation is what the gate
+exists to prevent.
+
+## Hardware notes
+
+A Classic2USB only exposes management identity in some modes. With a controller
+attached it passes through that controller's USB identity (an attached N64 pad
+made it enumerate as a Nintendo VID/PID named "N64 Controller"), and the
+dashboard's catalog filters will not list it. Removing the controller and
+selecting DInput brings up the documented VID/PID with the CDC management
+interface. Any operator instructions need to say this, or users will open the
+tool, see an empty device picker and conclude the tool is broken.
+
+The board's USB serial string in that mode is a product name, not a unique ID.
 
 ## Acceptance gates
 
