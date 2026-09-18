@@ -21,7 +21,21 @@
       "identity": {
         "supported": false
       },
-      "releases": [],
+      "releases": [
+        {
+          "version": "0.7.12",
+          "channel": "stable",
+          "hardwareGroups": [
+            "mistercade-v2"
+          ],
+          "fileName": "GP2040-CE_latest_MiSTercadeV2.uf2",
+          "fileType": "uf2",
+          "sha256": "129c6dca7a0cac38fd3788bae0a311b103c23b0ad9443cf2a0b912e74d77b83c",
+          "bytes": 2427392,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/ea932430241e12eb2b206b6e842c200f9c851c38/mistercade-v2/main/Scripts/_MiSTercade_V2_/GP2040-CE_latest_MiSTercadeV2.uf2",
+          "releaseNotes": "MiSTercade V2 firmware 0.7.12, mirrored from the canonical firmware catalog."
+        }
+      ],
       "backups": {
         "settings": {
           "supported": false,
@@ -39,6 +53,21 @@
       "directFlash": {
         "supported": false,
         "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      },
+      "flashPolicy": {
+        "expectedFamily": 3834380118,
+        "allowedFlashRanges": [
+          {
+            "start": 268435456,
+            "end": 270532608
+          }
+        ],
+        "protectedFlashRanges": [
+          {
+            "start": 270467072,
+            "end": 270532608
+          }
+        ]
       }
     },
     {
@@ -79,7 +108,21 @@
       "identity": {
         "supported": false
       },
-      "releases": [],
+      "releases": [
+        {
+          "version": "2.01",
+          "channel": "stable",
+          "hardwareGroups": [
+            "reflex-adapt-legacy"
+          ],
+          "fileName": "reflex-v2.01.zip",
+          "fileType": "zip",
+          "sha256": "c9d3e07325c4292fcd4505a1d0c2b09ebb971156fed2a084200ef2a6cd5dc487",
+          "bytes": 2003964,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/09c6dfe565f628368b661dcde8a4c3bb32d4db36/reflex-adapt-legacy/v2.01/reflex-v2.01.zip",
+          "releaseNotes": "Reflex Adapt Legacy / V1 (32u4 package) firmware package 2.01. Not a UF2 image and not installable from the browser; unpack it and follow the product's own flashing instructions."
+        }
+      ],
       "backups": {
         "settings": {
           "supported": false,
@@ -190,7 +233,21 @@
       "identity": {
         "supported": false
       },
-      "releases": [],
+      "releases": [
+        {
+          "version": "0.7.12",
+          "channel": "stable",
+          "hardwareGroups": [
+            "reflex-encode-v1"
+          ],
+          "fileName": "GP2040-CE_0.7.12_ReflexEncodeV1.2.uf2",
+          "fileType": "uf2",
+          "sha256": "cc2a0611754e67088a84997919357fade2b792edafe80807ea3fd2075353f01b",
+          "bytes": 2426880,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/89da2bda3eaa27fb195ca90f57e55ffd41fec11e/reflex-encode/v0.7.12/GP2040-CE_0.7.12_ReflexEncodeV1.2.uf2",
+          "releaseNotes": "Reflex Encode V1.2 firmware 0.7.12, mirrored from the canonical firmware catalog."
+        }
+      ],
       "backups": {
         "settings": {
           "supported": false,
@@ -208,6 +265,21 @@
       "directFlash": {
         "supported": false,
         "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      },
+      "flashPolicy": {
+        "expectedFamily": 3834380118,
+        "allowedFlashRanges": [
+          {
+            "start": 268435456,
+            "end": 270532608
+          }
+        ],
+        "protectedFlashRanges": [
+          {
+            "start": 270467072,
+            "end": 270532608
+          }
+        ]
       }
     },
     {
@@ -219,7 +291,21 @@
       "identity": {
         "supported": false
       },
-      "releases": [],
+      "releases": [
+        {
+          "version": "0.7.12",
+          "channel": "stable",
+          "hardwareGroups": [
+            "reflex-encode-v2"
+          ],
+          "fileName": "GP2040-CE_0.7.12_ReflexEncodeV2.0.uf2",
+          "fileType": "uf2",
+          "sha256": "e738d9edb49352be854fb908fad637992b9f6f3a0fd9c9036dca7e0a51f67052",
+          "bytes": 2426880,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/89da2bda3eaa27fb195ca90f57e55ffd41fec11e/reflex-encode/v0.7.12/GP2040-CE_0.7.12_ReflexEncodeV2.0.uf2",
+          "releaseNotes": "Reflex Encode V2.0 firmware 0.7.12, mirrored from the canonical firmware catalog."
+        }
+      ],
       "backups": {
         "settings": {
           "supported": false,
@@ -237,6 +323,21 @@
       "directFlash": {
         "supported": false,
         "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      },
+      "flashPolicy": {
+        "expectedFamily": 3834380118,
+        "allowedFlashRanges": [
+          {
+            "start": 268435456,
+            "end": 270532608
+          }
+        ],
+        "protectedFlashRanges": [
+          {
+            "start": 270467072,
+            "end": 270532608
+          }
+        ]
       }
     },
     {
@@ -248,7 +349,21 @@
       "identity": {
         "supported": false
       },
-      "releases": [],
+      "releases": [
+        {
+          "version": "0.7.12",
+          "channel": "stable",
+          "hardwareGroups": [
+            "reflex-ctrl-genesis6"
+          ],
+          "fileName": "GP2040-CE_0.7.12_ReflexCtrlGenesis6.uf2",
+          "fileType": "uf2",
+          "sha256": "9a87597e71d5327bfac403adc7c47a42302e383559ac87572136006f85adfbf6",
+          "bytes": 2427904,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/89da2bda3eaa27fb195ca90f57e55ffd41fec11e/reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlGenesis6.uf2",
+          "releaseNotes": "Reflex CTRL Genesis 6 firmware 0.7.12, mirrored from the canonical firmware catalog."
+        }
+      ],
       "backups": {
         "settings": {
           "supported": false,
@@ -266,6 +381,21 @@
       "directFlash": {
         "supported": false,
         "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      },
+      "flashPolicy": {
+        "expectedFamily": 3834380118,
+        "allowedFlashRanges": [
+          {
+            "start": 268435456,
+            "end": 270532608
+          }
+        ],
+        "protectedFlashRanges": [
+          {
+            "start": 270467072,
+            "end": 270532608
+          }
+        ]
       }
     },
     {
@@ -277,7 +407,21 @@
       "identity": {
         "supported": false
       },
-      "releases": [],
+      "releases": [
+        {
+          "version": "0.7.12",
+          "channel": "stable",
+          "hardwareGroups": [
+            "reflex-ctrl-nes"
+          ],
+          "fileName": "GP2040-CE_0.7.12_ReflexCtrlNES.uf2",
+          "fileType": "uf2",
+          "sha256": "f324b11fb3e94c8ef460c3c296e1a5b371e29ba41852a5c7ddb07efc41267441",
+          "bytes": 2427904,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/89da2bda3eaa27fb195ca90f57e55ffd41fec11e/reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlNES.uf2",
+          "releaseNotes": "Reflex CTRL NES firmware 0.7.12, mirrored from the canonical firmware catalog."
+        }
+      ],
       "backups": {
         "settings": {
           "supported": false,
@@ -295,6 +439,21 @@
       "directFlash": {
         "supported": false,
         "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      },
+      "flashPolicy": {
+        "expectedFamily": 3834380118,
+        "allowedFlashRanges": [
+          {
+            "start": 268435456,
+            "end": 270532608
+          }
+        ],
+        "protectedFlashRanges": [
+          {
+            "start": 270467072,
+            "end": 270532608
+          }
+        ]
       }
     },
     {
@@ -306,7 +465,21 @@
       "identity": {
         "supported": false
       },
-      "releases": [],
+      "releases": [
+        {
+          "version": "0.7.12",
+          "channel": "stable",
+          "hardwareGroups": [
+            "reflex-ctrl-snes"
+          ],
+          "fileName": "GP2040-CE_0.7.12_ReflexCtrlSNES.uf2",
+          "fileType": "uf2",
+          "sha256": "14af7681f971aeff1ddb573ad8c1aaf455ec0b5aeecd92a15c858034cdf1abcb",
+          "bytes": 2427904,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/89da2bda3eaa27fb195ca90f57e55ffd41fec11e/reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlSNES.uf2",
+          "releaseNotes": "Reflex CTRL SNES firmware 0.7.12, mirrored from the canonical firmware catalog."
+        }
+      ],
       "backups": {
         "settings": {
           "supported": false,
@@ -324,6 +497,21 @@
       "directFlash": {
         "supported": false,
         "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      },
+      "flashPolicy": {
+        "expectedFamily": 3834380118,
+        "allowedFlashRanges": [
+          {
+            "start": 268435456,
+            "end": 270532608
+          }
+        ],
+        "protectedFlashRanges": [
+          {
+            "start": 270467072,
+            "end": 270532608
+          }
+        ]
       }
     },
     {
@@ -335,7 +523,21 @@
       "identity": {
         "supported": false
       },
-      "releases": [],
+      "releases": [
+        {
+          "version": "0.7.12",
+          "channel": "stable",
+          "hardwareGroups": [
+            "reflex-ctrl-saturn"
+          ],
+          "fileName": "GP2040-CE_0.7.12_ReflexCtrlSaturn.uf2",
+          "fileType": "uf2",
+          "sha256": "d1cfb6784992af1f282f90c446fe8d5b20c031d47aa94bc04d14290050fe969d",
+          "bytes": 2427904,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/89da2bda3eaa27fb195ca90f57e55ffd41fec11e/reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlSaturn.uf2",
+          "releaseNotes": "Reflex CTRL Saturn firmware 0.7.12, mirrored from the canonical firmware catalog."
+        }
+      ],
       "backups": {
         "settings": {
           "supported": false,
@@ -353,6 +555,21 @@
       "directFlash": {
         "supported": false,
         "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      },
+      "flashPolicy": {
+        "expectedFamily": 3834380118,
+        "allowedFlashRanges": [
+          {
+            "start": 268435456,
+            "end": 270532608
+          }
+        ],
+        "protectedFlashRanges": [
+          {
+            "start": 270467072,
+            "end": 270532608
+          }
+        ]
       }
     },
     {
@@ -364,7 +581,21 @@
       "identity": {
         "supported": false
       },
-      "releases": [],
+      "releases": [
+        {
+          "version": "0.7.12",
+          "channel": "stable",
+          "hardwareGroups": [
+            "reflex-ctrl-vb"
+          ],
+          "fileName": "GP2040-CE_0.7.12_ReflexCtrlVB.uf2",
+          "fileType": "uf2",
+          "sha256": "a511a5eafa3f2c769803885e31700c78eec0257c39000f4f0f24fed8fd2f380e",
+          "bytes": 2427904,
+          "url": "https://raw.githubusercontent.com/misteraddons/firmware/89da2bda3eaa27fb195ca90f57e55ffd41fec11e/reflex-ctrl/v0.7.12/GP2040-CE_0.7.12_ReflexCtrlVB.uf2",
+          "releaseNotes": "Reflex CTRL Virtual Boy firmware 0.7.12, mirrored from the canonical firmware catalog."
+        }
+      ],
       "backups": {
         "settings": {
           "supported": false,
@@ -382,6 +613,21 @@
       "directFlash": {
         "supported": false,
         "reason": "Browser PICOBOOT write/verify is not hardware validated."
+      },
+      "flashPolicy": {
+        "expectedFamily": 3834380118,
+        "allowedFlashRanges": [
+          {
+            "start": 268435456,
+            "end": 270532608
+          }
+        ],
+        "protectedFlashRanges": [
+          {
+            "start": 270467072,
+            "end": 270532608
+          }
+        ]
       }
     },
     {
@@ -423,6 +669,7 @@
             "prism-v13"
           ],
           "fileName": "prism_dac.uf2",
+          "fileType": "uf2",
           "sha256": "2033708f2993bd7a3b0b15c55f3b0bbe6abf42c8f461ed6a23c5662b0add511a",
           "bytes": 570368,
           "url": "https://raw.githubusercontent.com/misteraddons/firmware/be29ae7b56368515963a20c2f3fa5a6e1bada6bb/reflex-prism/v1.11/prism_dac.uf2",
@@ -435,6 +682,7 @@
             "prism-v11"
           ],
           "fileName": "prism_dac.uf2",
+          "fileType": "uf2",
           "sha256": "8be99b04f84ca1f467f1a1826af81b84d55e500ee767f7718c5e255ebd897dd1",
           "bytes": 414208,
           "url": "https://raw.githubusercontent.com/misteraddons/firmware/6a11388cd17375f7b2b16b847808e7ea96cd85f4/reflex-prism/v1.10.10/prism_dac.uf2",
@@ -447,6 +695,7 @@
             "prism-v11"
           ],
           "fileName": "prism_dac.uf2",
+          "fileType": "uf2",
           "sha256": "d3c54b36b62806446d31429415ab6fec0af63ad919cca0ea51ecec3f75aba420",
           "bytes": 414208,
           "url": "https://raw.githubusercontent.com/misteraddons/firmware/f822934c8e11b64e193be21a00c5432871ed0951/reflex-prism/v1.10.9/prism_dac.uf2",
@@ -459,6 +708,7 @@
             "prism-v11"
           ],
           "fileName": "prism_dac.uf2",
+          "fileType": "uf2",
           "sha256": "472e425d8206744cb8a2201c8d62923f330ad5e3844e76d2a4e1a555866eb3d3",
           "bytes": 412672,
           "url": "https://raw.githubusercontent.com/misteraddons/firmware/64e3b53ae6ce4df268b90cacfe27523daed2a247/reflex-prism/v1.10.8/prism_dac.uf2",
@@ -471,6 +721,7 @@
             "prism-v11"
           ],
           "fileName": "prism_dac.uf2",
+          "fileType": "uf2",
           "sha256": "0c6788e7674d587c6781527465da792ed43d4f9612d23769930ad310542e1536",
           "bytes": 408064,
           "url": "https://raw.githubusercontent.com/misteraddons/firmware/2d732090050bd0d42ebbc7924450c0278798d527/reflex-prism/v1.10.7/prism_dac.uf2",
@@ -483,6 +734,7 @@
             "prism-v11"
           ],
           "fileName": "prism_dac.uf2",
+          "fileType": "uf2",
           "sha256": "7155e6347f480553885923b1dfbeba93229bc060d748ddf83b91ef857cb0b56c",
           "bytes": 407040,
           "url": "https://raw.githubusercontent.com/misteraddons/firmware/2d732090050bd0d42ebbc7924450c0278798d527/reflex-prism/v1.10.6/prism_dac.uf2",
@@ -495,6 +747,7 @@
             "prism-v11"
           ],
           "fileName": "prism_dac.uf2",
+          "fileType": "uf2",
           "sha256": "89cd2b7a2ca4e975c1e89f0fbf7aedb56bbd305315f7ec4a24e17d39637a1955",
           "bytes": 397824,
           "url": "https://raw.githubusercontent.com/misteraddons/firmware/8de4123dc17f9a7f47c37d8c23b75015f8d5e6d9/reflex-prism/v1.10.5/prism_dac.uf2",
@@ -507,6 +760,7 @@
             "prism-v11"
           ],
           "fileName": "prism_dac.uf2",
+          "fileType": "uf2",
           "sha256": "5d89a60a6ca6aaa74bf5570cdd7660f4a2200ccc36c0148cf545e6acffe5379a",
           "bytes": 382976,
           "url": "https://raw.githubusercontent.com/misteraddons/firmware/7a956f1b226400cc51e9c6961af2838e3ee2e44b/reflex-prism/v1.10.4/prism_dac.uf2",
@@ -519,6 +773,7 @@
             "prism-v11"
           ],
           "fileName": "prism_dac.uf2",
+          "fileType": "uf2",
           "sha256": "6e06c8dc93e713af8900c0f1f526335b93baab72a9d4ac156ca7e2340e48095e",
           "bytes": 381952,
           "url": "https://raw.githubusercontent.com/misteraddons/firmware/eaac20d66676395b4554ff5805996d28665844ee/reflex-prism/v1.10.3/prism_dac.uf2",
@@ -531,6 +786,7 @@
             "prism-v11"
           ],
           "fileName": "prism_dac.uf2",
+          "fileType": "uf2",
           "sha256": "e4cb7caf2f3146e4a36de168dcca500b534980f4f816c1fd853f2a6077a0ceec",
           "bytes": 415232,
           "url": "https://raw.githubusercontent.com/misteraddons/firmware/46f68d9b8956eb9db823daa657d7d09c8855602c/reflex-prism/v1.10.1/prism_dac.uf2",

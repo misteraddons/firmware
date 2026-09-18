@@ -250,7 +250,18 @@ export async function sha256Hex(bytes) {
 export async function validateDownload(bytes, release, product) {
   const digest = await sha256Hex(bytes);
   if (digest.toLowerCase() !== release.sha256.toLowerCase()) throw new DashboardError('checksum', 'Downloaded firmware checksum does not match the approved manifest.');
-  const inspected = validateUf2(new Uint8Array(bytes), product.flashPolicy);
+  // Not every product ships a UF2. A 32u4 package is a zip this tool cannot
+  // parse, so it gets integrity checking only, and says so rather than implying
+  // the contents were inspected. A UF2 with no policy is refused outright: a
+  // missing policy must not read as "nothing to check".
+  const fileType = (release.fileType || 'uf2').toLowerCase();
+  let inspected;
+  if (fileType === 'uf2') {
+    if (!product.flashPolicy) throw new DashboardError('unvalidatable-image', 'No approved flash policy exists for this product, so the UF2 cannot be validated.');
+    inspected = validateUf2(new Uint8Array(bytes), product.flashPolicy);
+  } else {
+    inspected = { fileType, inspected: false };
+  }
   if (!(release.hardwareGroups || [release.hardwareGroup]).includes(product.connectedHardwareGroup)) throw new DashboardError('incompatible-image', 'Firmware image is not approved for the connected hardware revision.');
   return { digest, ...inspected };
 }

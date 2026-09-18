@@ -27,8 +27,82 @@ def checksum_map(root: Path) -> dict[str, str]:
     return result
 
 
+# Products cleared to publish a browser release. Reflex Adapt Classic2USB is
+# deliberately absent: its replacement firmware is not ready, so the catalog
+# keeps offering nothing for it rather than an image nobody has approved.
+BROWSER_RELEASE_PRODUCTS = frozenset({
+    "mistercade-v2",
+    "reflex-adapt-legacy",
+    "reflex-ctrl-genesis6",
+    "reflex-ctrl-nes",
+    "reflex-ctrl-saturn",
+    "reflex-ctrl-snes",
+    "reflex-ctrl-vb",
+    "reflex-encode-v1",
+    "reflex-encode-v2",
+})
+
+# Directory names that mirror a release rather than naming a version.
+VERSION_ALIASES = frozenset({"latest", "main", "master", "current"})
+
+
 def relative_source(source: installer.FirmwareSource, root: Path) -> str:
     return source.path.resolve().relative_to(root.resolve()).as_posix()
+
+
+def file_digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def catalog_releases(item: installer.CatalogItem, root: Path, checksums: dict[str, str]) -> list[dict]:
+    """Releases for a product that ships one image covering the whole product.
+
+    Reflex Prism is handled separately because it has per-revision images. For
+    everything else a single image serves the product, so the product id doubles
+    as its one hardware group and gives release selection something to match on.
+    """
+    versions = installer.catalog_firmware_versions(item, root)
+    # The same bytes can be reachable both under a version directory and under a
+    # "latest"/"main" alias. Only a committed path is publishable, but an alias
+    # path carries no version, so recover the label by digest instead of
+    # inventing one. MiSTercade V2 is exactly this case.
+    label_by_digest: dict[str, str] = {}
+    for version in versions:
+        if version.version.casefold() in VERSION_ALIASES:
+            continue
+        label_by_digest.setdefault(file_digest(version.source.path), version.version.lstrip("v"))
+
+    releases: list[dict] = []
+    published: set[str] = set()
+    for version in versions:
+        try:
+            relative = relative_source(version.source, root)
+        except ValueError:
+            continue  # Outside the repository, e.g. the local firmware cache.
+        digest = checksums.get(relative)
+        label = label_by_digest.get(digest or "")
+        if not digest or not label or digest in published:
+            continue
+        published.add(digest)
+        installer.validate_firmware_source(version.source, item.expected_uf2_family)
+        is_uf2 = version.source.copy_name.lower().endswith(".uf2")
+        releases.append({
+            "version": label,
+            "channel": "stable",
+            "hardwareGroups": [item.item_id],
+            "fileName": version.source.copy_name,
+            "fileType": "uf2" if is_uf2 else version.source.copy_name.rsplit(".", 1)[-1].lower(),
+            "sha256": digest,
+            "bytes": version.source.path.stat().st_size,
+            "url": f"{PUBLIC_REPO_RAW}{committed_revision(root, relative)}/{relative}",
+            "releaseNotes": (
+                f"{item.label} firmware {label}, mirrored from the canonical firmware catalog."
+                if is_uf2
+                else f"{item.label} firmware package {label}. Not a UF2 image and not installable "
+                     "from the browser; unpack it and follow the product's own flashing instructions."
+            ),
+        })
+    return releases
 
 
 def committed_revision(root: Path, relative: str) -> str:
@@ -67,6 +141,16 @@ def browser_product(item: installer.CatalogItem, root: Path, checksums: dict[str
             },
         })
     if item.item_id != "reflex-prism":
+        if item.item_id in BROWSER_RELEASE_PRODUCTS:
+            product["releases"] = catalog_releases(item, root, checksums)
+            if any(release["fileType"] == "uf2" for release in product["releases"]):
+                product["flashPolicy"] = {
+                    "expectedFamily": item.expected_uf2_family,
+                    "allowedFlashRanges": [{"start": 0x10000000, "end": 0x10200000}],
+                    # These images stop well below the top 64 KiB, consistent with
+                    # persistent settings living there and surviving an update.
+                    "protectedFlashRanges": [{"start": 0x101F0000, "end": 0x10200000}],
+                }
         return product
 
     hardware = item.hardware_check or {}
@@ -131,6 +215,7 @@ def browser_product(item: installer.CatalogItem, root: Path, checksums: dict[str
             "channel": "stable",
             "hardwareGroups": hardware_groups,
             "fileName": version.source.copy_name,
+            "fileType": "uf2",
             "sha256": checksums[relative],
             "bytes": version.source.path.stat().st_size,
             "url": f"{PUBLIC_REPO_RAW}{committed_revision(root, relative)}/{relative}",
@@ -146,7 +231,7 @@ def build_manifest(root: Path = ROOT) -> dict:
         "schema": 1,
         "generatedFrom": "firmware_catalog.json + checksums.sha256 + firmware_installer.py",
         "privacy": {"uploads": False, "analytics": False, "storage": "local-only"},
-        "transports": {"serial": "supported", "hid": "identity-query", "picoboot": "investigated-disabled"},
+        "transports": {"serial": "supported", "hid": "identity-query", "picoboot": "scaffolded-disabled"},
         "products": products,
     }
 

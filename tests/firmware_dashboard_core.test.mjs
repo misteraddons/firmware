@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import { DashboardError, SimulatedTransport, UpdateSession, associateBootloaderTransition, compareVersions, identifyClassicSerialProduct, identifyProduct, identifyWebHidProduct, parseManagementIdentity, parseWebHidDeviceInfo, selectRelease, sha256Hex, validateDownload, validateUf2 } from '../web/firmware-dashboard/core.js';
 
 const prism = {
@@ -186,6 +187,37 @@ test('simulated transport covers permission cancellation, disconnects, backups a
   const backup = new SimulatedTransport({ backupFailure: true }); await backup.requestPermission();
   await assert.rejects(() => backup.query('dashboard config get'), error => error.code === 'backup-failed');
   const safe = new SimulatedTransport(); await safe.requestPermission(); assert.equal(safe.writes.length, 0);
+});
+test('a non-UF2 package is integrity checked and reported as not inspected', async () => {
+  const bytes = new TextEncoder().encode('PK not a uf2 at all');
+  const release = { version: '2.01', fileType: 'zip', sha256: await sha256Hex(bytes), hardwareGroups: ['reflex-adapt-legacy'] };
+  const result = await validateDownload(bytes.buffer, release, { connectedHardwareGroup: 'reflex-adapt-legacy' });
+  assert.equal(result.fileType, 'zip'); assert.equal(result.inspected, false); assert.ok(result.digest);
+});
+test('a UF2 release with no approved flash policy is refused rather than waved through', async () => {
+  const release = await approvedRelease();
+  await assert.rejects(() => validateDownload(uf2().buffer, release, { connectedHardwareGroup: 'prism-v11' }),
+    error => error instanceof DashboardError && error.code === 'unvalidatable-image');
+});
+test('every published release in the manifest resolves to a real file matching its recorded hash and policy', () => {
+  const manifest = JSON.parse(fs.readFileSync(new URL('../web/firmware-dashboard/manifest.json', import.meta.url)));
+  let uf2Count = 0; let otherCount = 0;
+  for (const product of manifest.products) {
+    for (const release of product.releases || []) {
+      const label = `${product.id} ${release.version}`;
+      const relative = new URL(release.url).pathname.split('/').slice(4).join('/');
+      const bytes = fs.readFileSync(new URL(`../${relative}`, import.meta.url));
+      assert.equal(bytes.length, release.bytes, `${label} byte count`);
+      assert.equal(createHash('sha256').update(bytes).digest('hex'), release.sha256, `${label} sha256`);
+      if (release.fileType === 'uf2') {
+        assert.ok(product.flashPolicy, `${label} publishes a UF2 but declares no flash policy`);
+        assert.ok(validateUf2(bytes, product.flashPolicy).blocks > 0, `${label} UF2 validation`);
+        uf2Count += 1;
+      } else otherCount += 1;
+    }
+  }
+  assert.ok(uf2Count >= 18, `expected the published UF2 catalog, saw ${uf2Count}`);
+  assert.equal(otherCount, 1, 'expected exactly the one non-UF2 package (32u4 zip)');
 });
 test('the exported approved Prism UF2 passes browser structural and range validation', () => {
   const manifest = JSON.parse(fs.readFileSync(new URL('../web/firmware-dashboard/manifest.json', import.meta.url)));
