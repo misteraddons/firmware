@@ -78,6 +78,26 @@ test('bootloader association requires one new device exposing the approved UID',
   expectCode(() => associateBootloaderTransition({ identity, transitionRequested: true, sourceDisconnected: false, afterDevices: [target] }), 'bootloader-unassociated');
 });
 test('Classic2USB has no approved release', () => assert.equal(selectRelease(classicSerial, 'classic2usb-published'), null));
+test('selectRelease picks the highest stable version for the matching hardware group', () => {
+  const product = { releases: [
+    { version: '1.10.0', channel: 'stable', hardwareGroups: ['prism-v11'] },
+    { version: '1.11.0', channel: 'stable', hardwareGroups: ['prism-v11'] },
+    { version: '1.9.0', channel: 'stable', hardwareGroups: ['prism-v11'] },
+  ] };
+  assert.equal(selectRelease(product, 'prism-v11').version, '1.11.0');
+});
+test('selectRelease excludes a newer prerelease unless the tester channel is explicitly requested', () => {
+  const product = { releases: [
+    { version: '1.11.0', channel: 'stable', hardwareGroups: ['prism-v11'] },
+    { version: '1.12.0-beta.1', channel: 'prerelease', hardwareGroups: ['prism-v11'] },
+  ] };
+  assert.equal(selectRelease(product, 'prism-v11').version, '1.11.0');
+  assert.equal(selectRelease(product, 'prism-v11', 'prerelease').version, '1.12.0-beta.1');
+});
+test('selectRelease excludes a release not approved for the connected hardware group', () => {
+  const product = { releases: [{ version: '1.11.0', channel: 'stable', hardwareGroups: ['prism-v12'] }] };
+  assert.equal(selectRelease(product, 'prism-v11'), null);
+});
 test('incompatible hardware is rejected', () => expectCode(() => identifyProduct([prism], { usbInfo: { vendorId: 0x16d0, productId: 0x14f6 }, response: '=== Status ===\nHardware target: Pro boards' }), 'incompatible-hardware'));
 test('corrupt UF2 is rejected', () => expectCode(() => validateUf2(uf2({ corrupt: true }), policy), 'corrupt-uf2'));
 test('wrong family is rejected', () => expectCode(() => validateUf2(uf2({ family: 1 }), policy), 'wrong-family'));

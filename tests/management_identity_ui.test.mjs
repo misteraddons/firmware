@@ -6,9 +6,9 @@ import * as core from '../web/firmware-dashboard/core.js';
 
 const catalog = JSON.parse(fs.readFileSync(new URL('../web/firmware-dashboard/manifest.json',import.meta.url)));
 const serialV2 = 'IDENTITY SCHEMA=2 PRODUCT=CLASSIC2USB TARGET=CLASSIC2USB_RP2040 MCU=RP2040 UID=A1B2C3D4E5F60718 BASE_VID=16D0 BASE_PID=1460 CAPS=002F VERSION=1.0.0 BUILD=src-12345678901234567890';
-function harness() {
+function harness({usbInfo = {usbVendorId:0x16d0,usbProductId:0x1460}, responses = {IDENTITY2:serialV2}} = {}) {
   const elements = new Map(), commands = [];
-  const port = {getInfo:()=>({usbVendorId:0x16d0,usbProductId:0x1460}), open:async()=>{},close:async()=>{},responses:{IDENTITY2:serialV2}};
+  const port = {getInfo:()=>usbInfo, open:async()=>{},close:async()=>{},responses};
   const fake = () => ({textContent:'',disabled:false,dataset:{},prepend(){},addEventListener(){}});
   const context = vm.createContext({...core, ReflexIdentity:globalThis.ReflexIdentity, console,
     document:{querySelector(id){if(!elements.has(id))elements.set(id,fake());return elements.get(id);},createElement:fake},
@@ -65,4 +65,19 @@ test('same-product different HID unit is rejected when reconnecting an approved 
   device.a[4]^=1;device.b[2]^=1;
   await assert.rejects(()=>h.connectHid(),/approved physical unit/);
   assert.equal(h.state.identity,null);assert.equal(h.state.session.identity.uniqueId,'A1B2C3D4E5F60718');
+});
+const prismStatus='=== Status ===\nFirmware Version: v1.11\nBoard ID: FEDCBA9876543210\nHardware target: V1.05/V1.1 boards\n[DASHBOARD] CONFIG BEGIN\n[DASHBOARD] CONFIG END';
+test('Prism UI verifies unique identity from the generic command path and disables the unapproved backup button',async()=>{
+  const h=harness({usbInfo:{usbVendorId:0x16d0,usbProductId:0x14f6}, responses:{'status\r\ndashboard config get':prismStatus}});
+  await h.connectSerial();
+  assert.equal(h.state.identity.product.id,'reflex-prism');assert.equal(h.state.identity.uniqueId,'FEDCBA9876543210');
+  assert.equal(h.state.identity.identitySupport,'verified');
+  assert.equal(h.elements.get('#backup-settings').disabled,true);
+  assert.equal(h.elements.get('#status').textContent,'Product recognized and unique identity verified from one serial query.');
+});
+test('Prism UI without a Board ID leaves identity unsupported, not implicitly verified',async()=>{
+  const h=harness({usbInfo:{usbVendorId:0x16d0,usbProductId:0x14f6}, responses:{'status\r\ndashboard config get':prismStatus.replace(/Board ID:.*\n/,'')}});
+  await h.connectSerial();
+  assert.equal(h.state.identity.uniqueId,null);assert.equal(h.state.identity.identitySupport,'unsupported');
+  assert.equal(h.elements.get('#connect-usb').disabled,true);
 });
