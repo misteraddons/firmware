@@ -82,7 +82,9 @@
         "infoCommand": "INFO",
         "schema": 1,
         "product": "CLASSIC2USB",
-        "hardwareTargets": ["CLASSIC2USB_RP2040"],
+        "hardwareTargets": [
+          "CLASSIC2USB_RP2040"
+        ],
         "identityV2Command": "IDENTITY2",
         "mcu": "RP2040",
         "baseVid": "16D0",
